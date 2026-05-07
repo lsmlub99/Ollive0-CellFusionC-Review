@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 try:
     from curl_cffi import requests as cf_requests
-    _IMPERSONATE = "chrome124"
+    _IMPERSONATE = "chrome120"
 except ImportError:
     cf_requests = requests
     _IMPERSONATE = None
@@ -28,7 +28,7 @@ def _cf_get(url, **kwargs):
 load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from db.schema import init_db, upsert_products, insert_review, get_existing_review_ids, get_all_products
+from db.schema import init_db, upsert_products, insert_review, get_existing_review_ids, get_all_products, get_conn
 
 BRAND_CODE = os.environ.get("BRAND_CODE", "A001854")
 
@@ -46,7 +46,7 @@ HEADERS_API = {
 
 
 def fetch_brand_products_requests(brand_code: str) -> list[dict]:
-    """requests로 브랜드 상품 목록 수집 (GitHub Actions용 — Playwright 불필요)"""
+    """requests로 브랜드 상품 목록 수집 (GitHub Actions용 -Playwright 불필요)"""
     from bs4 import BeautifulSoup
 
     url = "https://www.oliveyoung.co.kr/store/display/getBrandShopDetailGoodsPagingAjax.do"
@@ -67,7 +67,7 @@ def fetch_brand_products_requests(brand_code: str) -> list[dict]:
         res = requests.get(url, params=params, headers=HEADERS_WEB, timeout=15)
 
         if res.status_code != 200:
-            print(f"  브랜드 페이지 {res.status_code} — DB 기존 상품 목록 사용")
+            print(f"  브랜드 페이지 {res.status_code} -DB 기존 상품 목록 사용")
             break
 
         soup = BeautifulSoup(res.content, "html.parser")
@@ -99,21 +99,33 @@ def fetch_brand_products_requests(brand_code: str) -> list[dict]:
 
 def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> list[int]:
     """cursor 엔드포인트로 신규 리뷰 ID 수집.
-    - reviewType=ALL: 사진 없는 일반 리뷰 포함
-    - sortType=RECENT_DESC: 최신순 → 기존 ID 만나면 즉시 중단 (불필요한 요청 없음)
+    - reviewType=ALL: 사진/텍스트 리뷰 모두
+    - sortType=USEFUL_SCORE_DESC: 유일하게 작동하는 정렬 (RECENT_DESC는 400 에러)
+    - 커서 기반 페이지네이션: nextCursorId/Score/Count를 다음 요청에 전달
+    - 연속 100개 모두 기존 ID면 중단 (일일 증분 효율화)
     """
     url = "https://m.oliveyoung.co.kr/review/api/v2/reviews/cursor"
     new_ids = []
+    cursor_id = None
+    cursor_score = None
+    cursor_count = None
     page = 0
+    consecutive_existing = 0
+    STOP_THRESHOLD = 100
 
     while True:
         payload = {
             "goodsNumber": goods_no,
             "page": page,
             "size": size,
-            "sortType": "RECENT_DESC",
+            "sortType": "USEFUL_SCORE_DESC",
             "reviewType": "ALL",
         }
+        if cursor_id is not None:
+            payload["cursorId"] = cursor_id
+            payload["cursorScore"] = cursor_score
+            payload["cursorCount"] = cursor_count
+
         try:
             res = _cf_post(url, json=payload, headers=HEADERS_API, timeout=15)
         except Exception as e:
@@ -121,7 +133,7 @@ def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> li
             break
 
         if res.status_code != 200:
-            print(f"    cursor API {res.status_code} — 스킵")
+            print(f"    cursor API {res.status_code} -스킵")
             break
 
         body = res.json()
@@ -132,15 +144,26 @@ def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> li
         if not reviews:
             break
 
-        found_existing = False
+        page_all_existing = True
         for r in reviews:
             rid = r["reviewId"]
-            if rid in existing_ids:
-                found_existing = True
-                break
-            new_ids.append(rid)
+            if rid not in existing_ids:
+                new_ids.append(rid)
+                page_all_existing = False
+                consecutive_existing = 0
+            else:
+                consecutive_existing += 1
 
-        if found_existing or not has_next:
+        if page_all_existing:
+            pass
+        else:
+            consecutive_existing = 0
+
+        cursor_id = data.get("nextCursorId")
+        cursor_score = data.get("nextCursorScore")
+        cursor_count = data.get("nextCursorCount")
+
+        if not has_next or consecutive_existing >= STOP_THRESHOLD:
             break
 
         page += 1
@@ -161,43 +184,49 @@ def fetch_review_detail(review_id: int) -> dict | None:
 
 def run():
     print(f"=== 올리브영 리뷰 수집 시작 ({datetime.now().strftime('%Y-%m-%d %H:%M')}) ===\n")
-    init_db()
 
-    # 1단계: 브랜드 상품 목록
-    print("[1/3] 브랜드 상품 목록 수집 중...")
-    products = fetch_brand_products_requests(BRAND_CODE)
-    if products:
-        upsert_products(products)
-        print(f"  → {len(products)}개 상품 업서트 완료")
-    else:
-        products = get_all_products()
-        print(f"  → DB 기존 {len(products)}개 상품 사용")
+    conn = get_conn()
+    conn.autocommit = True
+    try:
+        init_db(conn=conn)
 
-    # 2단계: 신규 리뷰만 수집
-    existing_ids = get_existing_review_ids()
-    print(f"\n[2/3] 리뷰 수집 시작 (기존 {len(existing_ids)}개 스킵)\n")
-    total_new = 0
+        # 1단계: 브랜드 상품 목록
+        print("[1/3] 브랜드 상품 목록 수집 중...")
+        products = fetch_brand_products_requests(BRAND_CODE)
+        if products:
+            upsert_products(products, conn=conn)
+            print(f"  → {len(products)}개 상품 업서트 완료")
+        else:
+            products = get_all_products(conn=conn)
+            print(f"  → DB 기존 {len(products)}개 상품 사용")
 
-    for i, product in enumerate(products):
-        goods_no = product["goods_no"]
-        name = product["goods_name"][:30] if product["goods_name"] else goods_no
-        new_ids = fetch_new_review_ids(goods_no, existing_ids)
+        # 2단계: 신규 리뷰만 수집
+        existing_ids = get_existing_review_ids(conn=conn)
+        print(f"\n[2/3] 리뷰 수집 시작 (기존 {len(existing_ids)}개 스킵)\n")
+        total_new = 0
 
-        if not new_ids:
-            continue
+        for i, product in enumerate(products):
+            goods_no = product["goods_no"]
+            name = product["goods_name"][:30] if product["goods_name"] else goods_no
+            new_ids = fetch_new_review_ids(goods_no, existing_ids)
 
-        print(f"  ({i+1}/{len(products)}) {name} — 신규 {len(new_ids)}개")
-        for review_id in new_ids:
-            detail = fetch_review_detail(review_id)
-            if detail:
-                insert_review(detail, goods_no)
-                existing_ids.add(review_id)
-                total_new += 1
-            time.sleep(random.uniform(0.5, 1.0))
+            if not new_ids:
+                continue
 
-        time.sleep(random.uniform(1.5, 2.5))
+            print(f"  ({i+1}/{len(products)}) {name} -신규 {len(new_ids)}개")
+            for review_id in new_ids:
+                detail = fetch_review_detail(review_id)
+                if detail:
+                    insert_review(detail, goods_no, conn=conn)
+                    existing_ids.add(review_id)
+                    total_new += 1
+                time.sleep(random.uniform(0.5, 1.0))
 
-    print(f"\n[3/3] 완료 — 신규 {total_new}개 저장")
+            time.sleep(random.uniform(1.5, 2.5))
+
+        print(f"\n[3/3] 완료 -신규 {total_new}개 저장")
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

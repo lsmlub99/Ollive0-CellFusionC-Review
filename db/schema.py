@@ -1,4 +1,5 @@
 import os
+import json
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
@@ -9,12 +10,13 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor,
+                            options="-c statement_timeout=0")
 
 
-def init_db():
-    with get_conn() as conn:
-        with conn.cursor() as cur:
+def init_db(conn=None):
+    def _run(c):
+        with c.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS products (
                     goods_no    TEXT PRIMARY KEY,
@@ -39,17 +41,26 @@ def init_db():
                 )
             """)
             cur.execute("""
-                CREATE INDEX IF NOT EXISTS idx_reviews_goods_no ON reviews(goods_no);
-                CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at);
+                CREATE INDEX IF NOT EXISTS idx_reviews_goods_no ON reviews(goods_no)
             """)
-        conn.commit()
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at)
+            """)
+
+    if conn is not None:
+        _run(conn)
+    else:
+        with get_conn() as c:
+            _run(c)
+            c.commit()
 
 
-def upsert_products(products: list[dict]):
+def upsert_products(products: list[dict], conn=None):
     if not products:
         return
-    with get_conn() as conn:
-        with conn.cursor() as cur:
+
+    def _run(c):
+        with c.cursor() as cur:
             for p in products:
                 cur.execute("""
                     INSERT INTO products (goods_no, goods_name, rating, review_count, first_seen, last_seen)
@@ -60,42 +71,65 @@ def upsert_products(products: list[dict]):
                         review_count = EXCLUDED.review_count,
                         last_seen    = CURRENT_DATE
                 """, (p["goods_no"], p["goods_name"], p["rating"], p["review_count"]))
-        conn.commit()
+
+    if conn is not None:
+        _run(conn)
+    else:
+        with get_conn() as c:
+            _run(c)
+            c.commit()
 
 
-def insert_review(review: dict, goods_no: str):
+def insert_review(review: dict, goods_no: str, conn=None):
     profile = review.get("profileDto") or {}
-    import json
     trouble = json.dumps(profile.get("skinTrouble", []), ensure_ascii=False)
-    with get_conn() as conn:
+    params = (
+        review["reviewId"],
+        goods_no,
+        review.get("content", ""),
+        review.get("reviewScore"),
+        profile.get("skinType"),
+        trouble,
+        review.get("isRepurchase", False),
+        review.get("createdDateTime"),
+    )
+    sql = """
+        INSERT INTO reviews
+            (review_id, goods_no, content, score, skin_type, skin_trouble, is_repurchase, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (review_id) DO NOTHING
+    """
+    if conn is not None:
         with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO reviews
-                    (review_id, goods_no, content, score, skin_type, skin_trouble, is_repurchase, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (review_id) DO NOTHING
-            """, (
-                review["reviewId"],
-                goods_no,
-                review.get("content", ""),
-                review.get("reviewScore"),
-                profile.get("skinType"),
-                trouble,
-                review.get("isRepurchase", False),
-                review.get("createdDateTime"),
-            ))
-        conn.commit()
+            cur.execute(sql, params)
+    else:
+        with get_conn() as c:
+            with c.cursor() as cur:
+                cur.execute(sql, params)
+            c.commit()
 
 
-def get_existing_review_ids() -> set[int]:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
+def get_existing_review_ids(conn=None) -> set[int]:
+    def _run(c):
+        with c.cursor() as cur:
             cur.execute("SELECT review_id FROM reviews")
             return {r["review_id"] for r in cur.fetchall()}
 
+    if conn is not None:
+        return _run(conn)
+    else:
+        with get_conn() as c:
+            return _run(c)
 
-def get_all_products() -> list[dict]:
-    with get_conn() as conn:
-        with conn.cursor() as cur:
+
+def get_all_products(conn=None) -> list[dict]:
+    def _run(c):
+        with c.cursor() as cur:
             cur.execute("SELECT goods_no, goods_name FROM products ORDER BY goods_name")
-            return cur.fetchall()
+            return list(cur.fetchall())
+
+    if conn is not None:
+        return _run(conn)
+    else:
+        with get_conn() as c:
+            return _run(c)
