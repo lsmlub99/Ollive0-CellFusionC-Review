@@ -78,19 +78,56 @@ def fetch_brand_products_requests(brand_code: str) -> list[dict]:
     return products
 
 
-def fetch_review_ids(goods_no: str, max_pages: int = 10) -> list[int]:
-    url = "https://m.oliveyoung.co.kr/review/api/v2/reviews/photo-reviews"
-    review_ids = []
-    for page in range(max_pages):
-        res = requests.post(url, json={"goodsNumber": goods_no, "page": page, "size": 10}, headers=HEADERS_API, timeout=10)
+def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> list[int]:
+    """cursor 엔드포인트로 신규 리뷰 ID 수집.
+    - reviewType=ALL: 사진 없는 일반 리뷰 포함
+    - sortType=RECENT_DESC: 최신순 → 기존 ID 만나면 즉시 중단 (불필요한 요청 없음)
+    """
+    url = "https://m.oliveyoung.co.kr/review/api/v2/reviews/cursor"
+    new_ids = []
+    page = 0
+
+    while True:
+        payload = {
+            "goodsNumber": goods_no,
+            "page": page,
+            "size": size,
+            "sortType": "RECENT_DESC",
+            "reviewType": "ALL",
+        }
+        try:
+            res = requests.post(url, json=payload, headers=HEADERS_API, timeout=15)
+        except requests.RequestException as e:
+            print(f"    요청 오류: {e}")
+            break
+
         if res.status_code != 200:
+            print(f"    cursor API {res.status_code} — 스킵")
             break
-        data = res.json().get("data", [])
-        if not data:
+
+        body = res.json()
+        data = body.get("data") or {}
+        reviews = data.get("goodsReviewList") or []
+        has_next = data.get("hasNext", False)
+
+        if not reviews:
             break
-        review_ids.extend([r["reviewId"] for r in data])
-        time.sleep(random.uniform(0.8, 1.5))
-    return review_ids
+
+        found_existing = False
+        for r in reviews:
+            rid = r["reviewId"]
+            if rid in existing_ids:
+                found_existing = True
+                break
+            new_ids.append(rid)
+
+        if found_existing or not has_next:
+            break
+
+        page += 1
+        time.sleep(random.uniform(0.5, 1.0))
+
+    return new_ids
 
 
 def fetch_review_detail(review_id: int) -> dict | None:
@@ -125,8 +162,7 @@ def run():
     for i, product in enumerate(products):
         goods_no = product["goods_no"]
         name = product["goods_name"][:30] if product["goods_name"] else goods_no
-        review_ids = fetch_review_ids(goods_no, max_pages=10)
-        new_ids = [rid for rid in review_ids if rid not in existing_ids]
+        new_ids = fetch_new_review_ids(goods_no, existing_ids)
 
         if not new_ids:
             continue
