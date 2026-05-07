@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.db
 .playwright/
+logs/
 
 # Next.js
 web/.next/

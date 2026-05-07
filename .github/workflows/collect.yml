@@ -1,8 +1,9 @@
 name: Oliveyoung Review Collector
+# GitHub Actions datacenter IPs are blocked by Cloudflare.
+# Collection runs locally via Windows Task Scheduler (run_collector.bat).
+# This workflow is kept for manual dispatch only (e.g. testing infra).
 
 on:
-  schedule:
-    - cron: "0 21 * * *"
   workflow_dispatch:
 
 jobs:
