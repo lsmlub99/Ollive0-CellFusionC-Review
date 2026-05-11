@@ -101,8 +101,7 @@ def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> li
     """cursor 엔드포인트로 신규 리뷰 ID 수집.
     - reviewType=ALL: 사진/텍스트 리뷰 모두
     - sortType=USEFUL_SCORE_DESC: 유일하게 작동하는 정렬 (RECENT_DESC는 400 에러)
-    - 커서 기반 페이지네이션: nextCursorId/Score/Count를 다음 요청에 전달
-    - 연속 100개 모두 기존 ID면 중단 (일일 증분 효율화)
+    - hasNext=False까지 전체 순회 (유용순 정렬이라 새 리뷰가 맨 뒤에 있음)
     """
     url = "https://m.oliveyoung.co.kr/review/api/v2/reviews/cursor"
     new_ids = []
@@ -110,8 +109,6 @@ def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> li
     cursor_score = None
     cursor_count = None
     page = 0
-    consecutive_existing = 0
-    STOP_THRESHOLD = 100
 
     while True:
         payload = {
@@ -144,26 +141,16 @@ def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> li
         if not reviews:
             break
 
-        page_all_existing = True
         for r in reviews:
             rid = r["reviewId"]
             if rid not in existing_ids:
                 new_ids.append(rid)
-                page_all_existing = False
-                consecutive_existing = 0
-            else:
-                consecutive_existing += 1
-
-        if page_all_existing:
-            pass
-        else:
-            consecutive_existing = 0
 
         cursor_id = data.get("nextCursorId")
         cursor_score = data.get("nextCursorScore")
         cursor_count = data.get("nextCursorCount")
 
-        if not has_next or consecutive_existing >= STOP_THRESHOLD:
+        if not has_next:
             break
 
         page += 1
