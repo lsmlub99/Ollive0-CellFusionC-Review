@@ -1,6 +1,7 @@
 'use client'
 
 import type { Insights, KeywordItem } from '@/lib/types'
+import { SKIN_TYPE_MAP } from '@/lib/utils'
 
 interface InsightCardsProps {
   insights: Insights
@@ -146,7 +147,7 @@ export default function InsightCards({ insights, onKeywordClick, activeKeywords 
               const pct = skinTotal > 0 ? Math.round(s.cnt / skinTotal * 100) : 0
               return (
                 <div key={s.skin_type} className="flex items-center gap-3">
-                  <span className="text-xs text-text-secondary w-16 flex-none">{s.skin_type}</span>
+                  <span className="text-xs text-text-secondary w-16 flex-none">{SKIN_TYPE_MAP[s.skin_type] ?? s.skin_type}</span>
                   <div className="flex-1 h-1.5 bg-border-subtle rounded-full overflow-hidden">
                     <div
                       className="h-full bg-blue-300 rounded-full transition-all duration-700"

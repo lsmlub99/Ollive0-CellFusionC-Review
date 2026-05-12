@@ -1,6 +1,6 @@
-import { getStats, getProducts, getInsights, getReviews, getScoreDist, getProductStats, getTimeSeries, getNegativeClusters, getProductSummaries, getInsightsHistory } from '@/lib/db'
+import { getStats, getInsights, getScoreDist, getProductStats, getTimeSeries, getProductNegatives, getProductSummaries, getInsightsHistory } from '@/lib/db'
 import KPIStrip from '@/components/KPIStrip'
-import KeywordFeedBridge from '@/components/KeywordFeedBridge'
+import InsightCards from '@/components/InsightCards'
 import StatsAccordion from '@/components/StatsAccordion'
 import TimeSeriesChart from '@/components/TimeSeriesChart'
 import NegativeInsights from '@/components/NegativeInsights'
@@ -16,15 +16,13 @@ function formatLastUpdated(ts: string | null): string {
 }
 
 export default async function Page() {
-  const [stats, products, insights, reviewsData, scoreDist, productStats, timeSeries, negativeData, summaries, insightsHistory] = await Promise.all([
+  const [stats, insights, scoreDist, productStats, timeSeries, negativeData, summaries, insightsHistory] = await Promise.all([
     getStats(),
-    getProducts(),
     getInsights(),
-    getReviews({ limit: 20 }),
     getScoreDist(),
     getProductStats(),
     getTimeSeries(),
-    getNegativeClusters(),
+    getProductNegatives(),
     getProductSummaries(),
     getInsightsHistory(),
   ])
@@ -92,25 +90,13 @@ export default async function Page() {
           </section>
         )}
 
-        {/* 인사이트 + 리뷰 피드 (키워드 필터 연동) */}
-        <div className="animate-fade-up space-y-10" style={{ animationDelay: '80ms' }}>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold text-text-primary">리뷰</h2>
-            <span className="text-sm text-text-tertiary">
-              {stats.total_reviews.toLocaleString()}개
-            </span>
-          </div>
-          <KeywordFeedBridge
-            insights={insights}
-            initialReviews={reviewsData.reviews}
-            initialTotal={reviewsData.total}
-            initialHasMore={reviewsData.has_more}
-            products={products}
-          />
+        {/* 인사이트 */}
+        <div className="animate-fade-up" style={{ animationDelay: '80ms' }}>
+          <InsightCards insights={insights} />
         </div>
 
         {/* 불만 포인트 */}
-        {negativeData.total_neg > 0 && (
+        {negativeData.length > 0 && (
           <div className="animate-fade-up" style={{ animationDelay: '120ms' }}>
             <NegativeInsights data={negativeData} />
           </div>

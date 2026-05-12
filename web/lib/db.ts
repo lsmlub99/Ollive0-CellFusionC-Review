@@ -1,5 +1,5 @@
 import { Pool } from 'pg'
-import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, NegativeInsightsData, ProductSummary, InsightsSnapshot } from './types'
+import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, InsightsSnapshot } from './types'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -296,41 +296,59 @@ export async function getTimeSeries(): Promise<TimeSeriesPoint[]> {
   }))
 }
 
-export async function getNegativeClusters(): Promise<NegativeInsightsData> {
-  const kwRows = await query<{ word: string; cnt: string }>(`
-    SELECT word, COUNT(*) AS cnt FROM (
-      SELECT UNNEST(REGEXP_MATCHES(content, '[가-힣]{2,6}', 'g')) AS word
-      FROM reviews
-      WHERE score <= 2 AND content IS NOT NULL AND content != ''
+export async function getProductNegatives(): Promise<ProductNegativeData[]> {
+  const topProducts = await query<{ goods_no: string; goods_name: string; neg_count: string }>(`
+    SELECT r.goods_no, p.goods_name, COUNT(*) AS neg_count
+    FROM reviews r
+    JOIN products p ON r.goods_no = p.goods_no
+    WHERE r.score <= 2 AND r.content IS NOT NULL AND r.content != ''
+    GROUP BY r.goods_no, p.goods_name
+    ORDER BY neg_count DESC LIMIT 8
+  `)
+
+  if (topProducts.length === 0) return []
+  const goodsNos = topProducts.map(p => p.goods_no)
+
+  const kwRows = await query<{ goods_no: string; word: string; cnt: string }>(`
+    SELECT goods_no, word, COUNT(*) AS cnt FROM (
+      SELECT r.goods_no, UNNEST(REGEXP_MATCHES(r.content, '[가-힣]{2,6}', 'g')) AS word
+      FROM reviews r
+      WHERE r.goods_no = ANY($1) AND r.score <= 2
+        AND r.content IS NOT NULL AND r.content != ''
     ) t
     WHERE word NOT IN (${STOPWORDS})
     AND ${SUFFIX_FILTER}
     AND LENGTH(word) >= 2
-    GROUP BY word ORDER BY cnt DESC LIMIT 14
-  `)
+    GROUP BY goods_no, word
+    ORDER BY goods_no, cnt DESC
+  `, [goodsNos])
 
-  const samples = await query<Review>(`
-    SELECT r.review_id, r.goods_no, p.goods_name, r.content, r.score,
-           r.skin_type, r.skin_trouble, r.is_repurchase, r.created_at, r.collected_at
-    FROM reviews r
-    LEFT JOIN products p ON r.goods_no = p.goods_no
-    WHERE r.score <= 2 AND r.content IS NOT NULL AND r.content != ''
-    ORDER BY r.created_at DESC
-    LIMIT 5
-  `)
+  const sampleRows = await query<{ goods_no: string; content: string; score: number; created_at: string }>(`
+    SELECT goods_no, content, score, created_at FROM (
+      SELECT r.goods_no, r.content, r.score, r.created_at,
+             ROW_NUMBER() OVER (PARTITION BY r.goods_no ORDER BY r.created_at DESC) AS rn
+      FROM reviews r
+      WHERE r.goods_no = ANY($1) AND r.score <= 2
+        AND r.content IS NOT NULL AND r.content != ''
+    ) t WHERE rn <= 2
+  `, [goodsNos])
 
-  const [countRow] = await query<{ total: string }>(
-    `SELECT COUNT(*) AS total FROM reviews WHERE score <= 2`
-  )
-
-  return {
-    keywords: kwRows.map(r => ({ word: r.word, cnt: Number(r.cnt) })),
-    samples: samples.map(r => ({
-      ...r,
-      content: r.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-    })),
-    total_neg: Number(countRow?.total || 0),
-  }
+  return topProducts.map(p => ({
+    goods_no:   p.goods_no,
+    goods_name: p.goods_name,
+    neg_count:  Number(p.neg_count),
+    keywords: kwRows
+      .filter(k => k.goods_no === p.goods_no)
+      .slice(0, 5)
+      .map(k => ({ word: k.word, cnt: Number(k.cnt) })),
+    samples: sampleRows
+      .filter(s => s.goods_no === p.goods_no)
+      .map(s => ({
+        content:    s.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+        score:      Number(s.score),
+        created_at: s.created_at,
+      })),
+  }))
 }
 
 export async function getProductSummaries(): Promise<ProductSummary[]> {

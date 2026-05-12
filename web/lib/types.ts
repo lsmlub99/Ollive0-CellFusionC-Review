@@ -80,10 +80,12 @@ export interface TimeSeriesPoint {
   avg_score: number
 }
 
-export interface NegativeInsightsData {
+export interface ProductNegativeData {
+  goods_no: string
+  goods_name: string
+  neg_count: number
   keywords: KeywordItem[]
-  samples: Review[]
-  total_neg: number
+  samples: { content: string; score: number; created_at: string }[]
 }
 
 export interface ProductSummary {

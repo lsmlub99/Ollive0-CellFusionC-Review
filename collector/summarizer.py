@@ -84,10 +84,10 @@ def run():
                 reviews = list(cur.fetchall())
 
             if len(reviews) < 10:
-                print(f"  ({i+1}/{len(products)}) {goods_name[:30]} — 리뷰 부족 ({len(reviews)}개) 스킵")
+                print(f"  ({i+1}/{len(products)}) {goods_name[:30]} -리뷰 부족 ({len(reviews)}개) 스킵")
                 continue
 
-            print(f"  ({i+1}/{len(products)}) {goods_name[:30]} — {len(reviews)}개 리뷰 요약 중...")
+            print(f"  ({i+1}/{len(products)}) {goods_name[:30]} -{len(reviews)}개 리뷰 요약 중...")
             try:
                 summary = summarize_product(goods_name, reviews)
                 with conn.cursor() as cur:
