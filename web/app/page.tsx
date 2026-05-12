@@ -1,7 +1,10 @@
-import { getStats, getProducts, getInsights, getReviews, getScoreDist, getProductStats } from '@/lib/db'
+import { getStats, getProducts, getInsights, getReviews, getScoreDist, getProductStats, getTimeSeries, getNegativeClusters, getProductSummaries } from '@/lib/db'
 import KPIStrip from '@/components/KPIStrip'
 import KeywordFeedBridge from '@/components/KeywordFeedBridge'
 import StatsAccordion from '@/components/StatsAccordion'
+import TimeSeriesChart from '@/components/TimeSeriesChart'
+import NegativeInsights from '@/components/NegativeInsights'
+import ProductSummarySection from '@/components/ProductSummarySection'
 
 export const revalidate = 3600
 
@@ -12,13 +15,16 @@ function formatLastUpdated(ts: string | null): string {
 }
 
 export default async function Page() {
-  const [stats, products, insights, reviewsData, scoreDist, productStats] = await Promise.all([
+  const [stats, products, insights, reviewsData, scoreDist, productStats, timeSeries, negativeData, summaries] = await Promise.all([
     getStats(),
     getProducts(),
     getInsights(),
     getReviews({ limit: 20 }),
     getScoreDist(),
     getProductStats(),
+    getTimeSeries(),
+    getNegativeClusters(),
+    getProductSummaries(),
   ])
 
   return (
@@ -71,6 +77,19 @@ export default async function Page() {
           <KPIStrip stats={stats} />
         </section>
 
+        {/* 시계열 트렌드 */}
+        {timeSeries.length > 1 && (
+          <section className="animate-fade-up" style={{ animationDelay: '60ms' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-xl font-semibold text-text-primary">리뷰 트렌드</h2>
+              <span className="text-sm text-text-tertiary">{timeSeries.length}개월</span>
+            </div>
+            <div className="border border-border rounded-lg bg-surface px-5 py-4">
+              <TimeSeriesChart data={timeSeries} />
+            </div>
+          </section>
+        )}
+
         {/* 인사이트 + 리뷰 피드 (키워드 필터 연동) */}
         <div className="animate-fade-up space-y-10" style={{ animationDelay: '80ms' }}>
           <div className="flex items-center gap-2">
@@ -88,12 +107,24 @@ export default async function Page() {
           />
         </div>
 
+        {/* 불만 포인트 */}
+        {negativeData.total_neg > 0 && (
+          <div className="animate-fade-up" style={{ animationDelay: '120ms' }}>
+            <NegativeInsights data={negativeData} />
+          </div>
+        )}
+
         {/* 구분선 */}
         <hr className="border-border-subtle" />
 
         {/* 상세 통계 */}
         <div className="animate-fade-up" style={{ animationDelay: '160ms' }}>
           <StatsAccordion scoreDist={scoreDist} productStats={productStats} />
+        </div>
+
+        {/* AI 상품 분석 */}
+        <div className="animate-fade-up" style={{ animationDelay: '200ms' }}>
+          <ProductSummarySection summaries={summaries} />
         </div>
 
         {/* 푸터 */}

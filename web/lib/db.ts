@@ -1,5 +1,5 @@
 import { Pool } from 'pg'
-import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType } from './types'
+import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, NegativeInsightsData, ProductSummary } from './types'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -60,11 +60,7 @@ export async function getProducts(): Promise<Product[]> {
   `)
 }
 
-export async function getInsights(goodsNo?: string): Promise<Insights> {
-  const where = goodsNo ? 'WHERE r.goods_no = $1' : ''
-  const params = goodsNo ? [goodsNo] : []
-
-  const STOPWORDS = `
+const STOPWORDS = `
     '이','가','을','를','은','는','에','의','도','로','이고','하고',
     '있어','없어','같아','같은','너무','진짜','정말','많이','조금',
     '이거','거예요','에요','아요','어요','네요','해요','했어','해서',
@@ -90,9 +86,13 @@ export async function getInsights(goodsNo?: string): Promise<Insights> {
     '완전','요즘','생각보다','그래도','그러나','하지만','그리고'
   `
 
-  const SUFFIX_FILTER = `
-    word !~ '(아요|어요|이에요|해요|하고|이고|이라|에서|으로|에도|처럼|아서|어서|와서|이며|이나|이든|없이|인데|한다|됩니다|해서|하면|하며|습니다|가|이|을|를|은|는|에|의|도|로|와|고|며|면|서|든|른|지|라|요|기|데|게|다|ㄹ|할|수|서|적)$'
-  `
+const SUFFIX_FILTER = `
+  word !~ '(아요|어요|이에요|해요|하고|이고|이라|에서|으로|에도|처럼|아서|어서|와서|이며|이나|이든|없이|인데|한다|됩니다|해서|하면|하며|습니다|가|이|을|를|은|는|에|의|도|로|와|고|며|면|서|든|른|지|라|요|기|데|게|다|ㄹ|할|수|서|적)$'
+`
+
+export async function getInsights(goodsNo?: string): Promise<Insights> {
+  const where = goodsNo ? 'WHERE r.goods_no = $1' : ''
+  const params = goodsNo ? [goodsNo] : []
 
   // 긍정 키워드 (★4-5)
   const posRows = await query<{ word: string; cnt: string }>(
@@ -276,4 +276,80 @@ export async function getProductStats(): Promise<ProductStats[]> {
     LEFT JOIN reviews r ON p.goods_no = r.goods_no
     GROUP BY p.goods_name ORDER BY review_cnt DESC
   `)
+}
+
+export async function getTimeSeries(): Promise<TimeSeriesPoint[]> {
+  const rows = await query<{ month: string; review_cnt: string; avg_score: string }>(`
+    SELECT
+      SUBSTRING(created_at, 1, 7)        AS month,
+      COUNT(*)                            AS review_cnt,
+      ROUND(AVG(score)::numeric, 2)       AS avg_score
+    FROM reviews
+    WHERE created_at IS NOT NULL AND LENGTH(created_at) >= 7
+    GROUP BY month
+    ORDER BY month
+  `)
+  return rows.map(r => ({
+    month:      r.month,
+    review_cnt: Number(r.review_cnt),
+    avg_score:  Number(r.avg_score),
+  }))
+}
+
+export async function getNegativeClusters(): Promise<NegativeInsightsData> {
+  const kwRows = await query<{ word: string; cnt: string }>(`
+    SELECT word, COUNT(*) AS cnt FROM (
+      SELECT UNNEST(REGEXP_MATCHES(content, '[가-힣]{2,6}', 'g')) AS word
+      FROM reviews
+      WHERE score <= 2 AND content IS NOT NULL AND content != ''
+    ) t
+    WHERE word NOT IN (${STOPWORDS})
+    AND ${SUFFIX_FILTER}
+    AND LENGTH(word) >= 2
+    GROUP BY word ORDER BY cnt DESC LIMIT 14
+  `)
+
+  const samples = await query<Review>(`
+    SELECT r.review_id, r.goods_no, p.goods_name, r.content, r.score,
+           r.skin_type, r.skin_trouble, r.is_repurchase, r.created_at, r.collected_at
+    FROM reviews r
+    LEFT JOIN products p ON r.goods_no = p.goods_no
+    WHERE r.score <= 2 AND r.content IS NOT NULL AND r.content != ''
+    ORDER BY r.created_at DESC
+    LIMIT 5
+  `)
+
+  const [countRow] = await query<{ total: string }>(
+    `SELECT COUNT(*) AS total FROM reviews WHERE score <= 2`
+  )
+
+  return {
+    keywords: kwRows.map(r => ({ word: r.word, cnt: Number(r.cnt) })),
+    samples: samples.map(r => ({
+      ...r,
+      content: r.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+    })),
+    total_neg: Number(countRow?.total || 0),
+  }
+}
+
+export async function getProductSummaries(): Promise<ProductSummary[]> {
+  try {
+    const rows = await query<{
+      goods_no: string; goods_name: string; summary_json: string; generated_at: string
+    }>(`
+      SELECT ps.goods_no, p.goods_name, ps.summary_json, ps.generated_at
+      FROM product_summaries ps
+      JOIN products p ON ps.goods_no = p.goods_no
+      ORDER BY p.goods_name
+    `)
+    return rows.map(r => ({
+      goods_no:    r.goods_no,
+      goods_name:  r.goods_name,
+      generated_at: r.generated_at,
+      ...JSON.parse(r.summary_json),
+    }))
+  } catch {
+    return []
+  }
 }

@@ -46,6 +46,13 @@ def init_db(conn=None):
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at)
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS product_summaries (
+                    goods_no      TEXT PRIMARY KEY REFERENCES products(goods_no),
+                    summary_json  TEXT NOT NULL,
+                    generated_at  TIMESTAMP DEFAULT NOW()
+                )
+            """)
 
     if conn is not None:
         _run(conn)

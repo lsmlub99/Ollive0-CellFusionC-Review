@@ -73,3 +73,24 @@ export interface ReviewsResponse {
   has_more: boolean
   total: number
 }
+
+export interface TimeSeriesPoint {
+  month: string    // "2024.01"
+  review_cnt: number
+  avg_score: number
+}
+
+export interface NegativeInsightsData {
+  keywords: KeywordItem[]
+  samples: Review[]
+  total_neg: number
+}
+
+export interface ProductSummary {
+  goods_no: string
+  goods_name: string
+  pros: string[]
+  cons: string[]
+  customer_profile: string
+  generated_at: string
+}

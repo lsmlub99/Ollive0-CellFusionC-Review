@@ -166,14 +166,22 @@ def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> li
     return new_ids
 
 
-def fetch_review_detail(review_id: int) -> dict | None:
-    res = _cf_get(
-        f"https://m.oliveyoung.co.kr/review/api/v2/reviews/{review_id}",
-        headers=HEADERS_API, timeout=10
-    )
-    if res.status_code != 200:
-        return None
-    return res.json().get("data")
+def fetch_review_detail(review_id: int, retries: int = 3) -> dict | None:
+    for attempt in range(retries):
+        try:
+            res = _cf_get(
+                f"https://m.oliveyoung.co.kr/review/api/v2/reviews/{review_id}",
+                headers=HEADERS_API, timeout=15
+            )
+            if res.status_code != 200:
+                return None
+            return res.json().get("data")
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(random.uniform(3.0, 6.0))
+            else:
+                print(f"    리뷰 {review_id} 실패 (재시도 {retries}회): {e}")
+    return None
 
 
 def run():
