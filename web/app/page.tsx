@@ -1,10 +1,11 @@
-import { getStats, getProducts, getInsights, getReviews, getScoreDist, getProductStats, getTimeSeries, getNegativeClusters, getProductSummaries } from '@/lib/db'
+import { getStats, getProducts, getInsights, getReviews, getScoreDist, getProductStats, getTimeSeries, getNegativeClusters, getProductSummaries, getInsightsHistory } from '@/lib/db'
 import KPIStrip from '@/components/KPIStrip'
 import KeywordFeedBridge from '@/components/KeywordFeedBridge'
 import StatsAccordion from '@/components/StatsAccordion'
 import TimeSeriesChart from '@/components/TimeSeriesChart'
 import NegativeInsights from '@/components/NegativeInsights'
 import ProductSummarySection from '@/components/ProductSummarySection'
+import InsightsHistory from '@/components/InsightsHistory'
 
 export const revalidate = 3600
 
@@ -15,7 +16,7 @@ function formatLastUpdated(ts: string | null): string {
 }
 
 export default async function Page() {
-  const [stats, products, insights, reviewsData, scoreDist, productStats, timeSeries, negativeData, summaries] = await Promise.all([
+  const [stats, products, insights, reviewsData, scoreDist, productStats, timeSeries, negativeData, summaries, insightsHistory] = await Promise.all([
     getStats(),
     getProducts(),
     getInsights(),
@@ -25,6 +26,7 @@ export default async function Page() {
     getTimeSeries(),
     getNegativeClusters(),
     getProductSummaries(),
+    getInsightsHistory(),
   ])
 
   return (
@@ -125,6 +127,11 @@ export default async function Page() {
         {/* AI 상품 분석 */}
         <div className="animate-fade-up" style={{ animationDelay: '200ms' }}>
           <ProductSummarySection summaries={summaries} />
+        </div>
+
+        {/* 수집 이력 */}
+        <div className="animate-fade-up" style={{ animationDelay: '240ms' }}>
+          <InsightsHistory history={insightsHistory} />
         </div>
 
         {/* 푸터 */}

@@ -94,3 +94,15 @@ export interface ProductSummary {
   customer_profile: string
   generated_at: string
 }
+
+export interface InsightsSnapshot {
+  id: number
+  snapshot_at: string
+  total_reviews: number
+  new_reviews: number
+  avg_score: number
+  repurchase_pct: number
+  five_star_pct: number
+  positive_keywords: { word: string; cnt: number }[]
+  negative_keywords: { word: string; cnt: number }[]
+}

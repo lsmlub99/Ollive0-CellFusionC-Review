@@ -1,5 +1,5 @@
 import { Pool } from 'pg'
-import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, NegativeInsightsData, ProductSummary } from './types'
+import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, NegativeInsightsData, ProductSummary, InsightsSnapshot } from './types'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -348,6 +348,39 @@ export async function getProductSummaries(): Promise<ProductSummary[]> {
       goods_name:  r.goods_name,
       generated_at: r.generated_at,
       ...JSON.parse(r.summary_json),
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function getInsightsHistory(limit = 60): Promise<InsightsSnapshot[]> {
+  try {
+    const rows = await query<{
+      id: string; snapshot_at: string; total_reviews: string; new_reviews: string
+      avg_score: string; repurchase_pct: string; five_star_pct: string
+      positive_keywords: unknown; negative_keywords: unknown
+    }>(`
+      SELECT id, snapshot_at, total_reviews, new_reviews,
+             avg_score, repurchase_pct, five_star_pct,
+             positive_keywords, negative_keywords
+      FROM insights_snapshots
+      ORDER BY snapshot_at DESC
+      LIMIT $1
+    `, [limit])
+
+    return rows.map(r => ({
+      id:                Number(r.id),
+      snapshot_at:       r.snapshot_at,
+      total_reviews:     Number(r.total_reviews),
+      new_reviews:       Number(r.new_reviews),
+      avg_score:         Number(r.avg_score),
+      repurchase_pct:    Number(r.repurchase_pct),
+      five_star_pct:     Number(r.five_star_pct),
+      positive_keywords: typeof r.positive_keywords === 'string'
+        ? JSON.parse(r.positive_keywords) : (r.positive_keywords as { word: string; cnt: number }[]),
+      negative_keywords: typeof r.negative_keywords === 'string'
+        ? JSON.parse(r.negative_keywords) : (r.negative_keywords as { word: string; cnt: number }[]),
     }))
   } catch {
     return []

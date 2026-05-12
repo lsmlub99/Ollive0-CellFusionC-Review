@@ -28,7 +28,7 @@ def _cf_get(url, **kwargs):
 load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from db.schema import init_db, upsert_products, insert_review, get_existing_review_ids, get_all_products, get_conn
+from db.schema import init_db, upsert_products, insert_review, get_existing_review_ids, get_all_products, get_conn, snapshot_insights
 
 BRAND_CODE = os.environ.get("BRAND_CODE", "A001854")
 
@@ -227,6 +227,9 @@ def run():
             time.sleep(random.uniform(1.5, 2.5))
 
         print(f"\n[3/3] 완료 -신규 {total_new}개 저장")
+        print("  → 인사이트 스냅샷 저장 중...")
+        snapshot_insights(total_new, conn=conn)
+        print("  → 스냅샷 저장 완료")
     finally:
         conn.close()
 
