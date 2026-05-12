@@ -25,7 +25,7 @@ PROMPT = """다음은 올리브영 '{name}' 제품의 실구매 리뷰 {n}개입
 }}"""
 
 
-def _sample_reviews(reviews: list[dict], max_total: int = 150, per_score: int = 30) -> list[dict]:
+def _sample_reviews(reviews: list[dict], max_total: int = 40, per_score: int = 8) -> list[dict]:
     by_score: dict[int, list] = {}
     for r in reviews:
         by_score.setdefault(r['score'], []).append(r)
@@ -102,9 +102,27 @@ def run():
                 print(f"    장점: {summary['pros'][0] if summary['pros'] else '-'}")
                 print(f"    단점: {summary['cons'][0] if summary['cons'] else '-'}")
             except Exception as e:
-                print(f"    오류: {e}")
+                if 'rate_limit' in str(e).lower() or '429' in str(e):
+                    print(f"    rate limit - 60초 대기 후 재시도...")
+                    time.sleep(60)
+                    try:
+                        summary = summarize_product(goods_name, reviews)
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """INSERT INTO product_summaries (goods_no, summary_json, generated_at)
+                                   VALUES (%s, %s, NOW())
+                                   ON CONFLICT (goods_no) DO UPDATE SET
+                                       summary_json = EXCLUDED.summary_json,
+                                       generated_at = NOW()""",
+                                (goods_no, json.dumps(summary, ensure_ascii=False))
+                            )
+                        print(f"    재시도 성공")
+                    except Exception as e2:
+                        print(f"    재시도 실패: {e2}")
+                else:
+                    print(f"    오류: {e}")
 
-            time.sleep(1.0)
+            time.sleep(30)
 
         print("\n=== 완료 ===")
     finally:
