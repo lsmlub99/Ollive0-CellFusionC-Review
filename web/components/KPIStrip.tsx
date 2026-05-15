@@ -25,7 +25,7 @@ export default function KPIStrip({ stats }: KPIStripProps) {
       label: '5점 만족',
       value: `${stats.five_star_pct}%`,
       sub: `${stats.five_star_count.toLocaleString()}개 리뷰`,
-      color: '#C9956C',
+      color: '#B8860B',
       tooltip: '별점 5점을 준 리뷰 비율입니다.',
     },
   ]
@@ -36,7 +36,9 @@ export default function KPIStrip({ stats }: KPIStripProps) {
         <div
           key={item.label}
           className="relative group/kpi bg-surface rounded-lg md:rounded-xl px-4 py-4 md:px-5 md:py-5
-                     border border-border shadow-kpi text-center"
+                     border border-border shadow-kpi text-center
+                     border-t-2 transition-shadow duration-200 hover:shadow-kpi-hover"
+          style={{ borderTopColor: `${item.color}30` }}
         >
           <div className="absolute top-2.5 right-2.5">
             <Info size={12} className="text-text-tertiary/60 hover:text-text-tertiary transition-colors cursor-default" />
@@ -51,11 +53,11 @@ export default function KPIStrip({ stats }: KPIStripProps) {
             </div>
           </div>
 
-          <p className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
+          <p className="font-label text-[10px] font-medium tracking-[0.14em] uppercase text-text-tertiary mb-2.5">
             {item.label}
           </p>
           <p
-            className="text-3xl md:text-4xl font-bold tracking-tight leading-none mb-1.5"
+            className="font-serif text-3xl md:text-4xl font-semibold leading-none mb-1.5"
             style={{ color: item.color }}
           >
             {item.value}

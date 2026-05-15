@@ -17,7 +17,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className="min-h-screen bg-background antialiased">
-        {children}
+        <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
+          <div className="absolute -top-60 left-1/2 -translate-x-1/2 w-[800px] h-[800px] rounded-full bg-accent/[0.025] blur-3xl" />
+        </div>
+        <div className="relative">
+          {children}
+        </div>
       </body>
     </html>
   )

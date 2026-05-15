@@ -217,10 +217,10 @@ def snapshot_insights(new_reviews: int, conn=None):
             """)
             stats = cur.fetchone()
 
-            cur.execute(kw_sql.format(score_filter="score >= 4"))
+            cur.execute(kw_sql.replace("{score_filter}", "score >= 4"))
             pos_kw = [{"word": r["word"], "cnt": r["cnt"]} for r in cur.fetchall()]
 
-            cur.execute(kw_sql.format(score_filter="score <= 2"))
+            cur.execute(kw_sql.replace("{score_filter}", "score <= 2"))
             neg_kw = [{"word": r["word"], "cnt": r["cnt"]} for r in cur.fetchall()]
 
             cur.execute("""

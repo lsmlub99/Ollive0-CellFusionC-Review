@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, Sparkles } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { ProductSummary } from '@/lib/types'
 import { extractShortName } from '@/lib/utils'
+import SectionDivider from '@/components/SectionDivider'
 
 interface Props {
   summaries: ProductSummary[]
@@ -71,8 +72,8 @@ function SummaryCard({ s }: { s: ProductSummary }) {
 
               {/* 고객 특성 */}
               {s.customer_profile && (
-                <div className="bg-accent-bg border border-accent-border rounded-md px-3 py-2">
-                  <p className="text-2xs font-semibold text-accent-fg mb-1">주요 고객층</p>
+                <div className="bg-accent-bg border border-accent-border border-t-2 border-t-accent/40 rounded-md px-3 py-2.5">
+                  <p className="font-label text-[10px] tracking-[0.14em] uppercase text-accent-fg/70 mb-1">Customer Profile</p>
                   <p className="text-xs text-text-secondary">{s.customer_profile}</p>
                 </div>
               )}
@@ -89,12 +90,14 @@ function SummaryCard({ s }: { s: ProductSummary }) {
 export default function ProductSummarySection({ summaries }: Props) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Sparkles size={16} className="text-accent" />
-        <h2 className="text-xl font-semibold text-text-primary">AI 상품 분석</h2>
-        {summaries.length > 0 && (
-          <span className="text-sm text-text-tertiary">{summaries.length}개 상품</span>
-        )}
+      <div className="mb-5">
+        <SectionDivider tag="AI Analysis" />
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold text-text-primary">AI 상품 분석</h2>
+          {summaries.length > 0 && (
+            <span className="text-sm text-text-tertiary">{summaries.length}개 상품</span>
+          )}
+        </div>
       </div>
 
       {summaries.length === 0 ? (

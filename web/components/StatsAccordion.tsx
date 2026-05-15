@@ -63,7 +63,7 @@ export default function StatsAccordion({ scoreDist, productStats }: StatsAccordi
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-border-subtle/50 transition-colors"
       >
-        <span className="text-sm font-semibold text-text-secondary">상세 통계</span>
+        <span className="font-label text-[11px] tracking-[0.12em] uppercase text-text-secondary font-medium">상세 통계</span>
         <ChevronDown
           size={16}
           className={`text-text-tertiary transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -82,8 +82,8 @@ export default function StatsAccordion({ scoreDist, productStats }: StatsAccordi
             <div className="px-5 pb-6 space-y-6 border-t border-border">
               {/* 평점 분포 */}
               <div className="pt-5">
-                <p className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider mb-4">
-                  평점 분포
+                <p className="font-label text-[10px] font-medium tracking-[0.16em] uppercase text-accent/70 mb-4">
+                  Score Distribution
                 </p>
                 <div className="space-y-2.5">
                   {[5, 4, 3, 2, 1].map(s => {
@@ -113,8 +113,8 @@ export default function StatsAccordion({ scoreDist, productStats }: StatsAccordi
 
               {/* 상품별 현황 */}
               <div>
-                <p className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
-                  상품별 현황
+                <p className="font-label text-[10px] font-medium tracking-[0.16em] uppercase text-accent/70 mb-3">
+                  By Product
                 </p>
 
                 {/* 검색 */}

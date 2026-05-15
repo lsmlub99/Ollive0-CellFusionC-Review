@@ -9,7 +9,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-pretendard)', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        sans:  ['var(--font-pretendard)', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+        label: ['"IBM Plex Mono"', 'monospace'],
       },
       colors: {
         background: '#FAFAF9',
@@ -24,10 +26,10 @@ const config: Config = {
           tertiary:  '#A8A29E',
         },
         accent: {
-          DEFAULT: '#C9956C',
-          bg:      '#FDF3EC',
-          fg:      '#7C3D1F',
-          border:  '#F0CAAA',
+          DEFAULT: '#B8860B',
+          bg:      '#FBF8EC',
+          fg:      '#5C4200',
+          border:  '#DFC97A',
         },
         score: {
           5: '#16A34A',
@@ -69,9 +71,10 @@ const config: Config = {
         '2xl': '20px',
       },
       boxShadow: {
-        card:   '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        'card-hover': '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
-        kpi:    '0 0 0 1px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.04)',
+        card:        '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+        'card-hover':'0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
+        kpi:         '0 0 0 1px rgba(184,134,11,0.10), 0 2px 8px rgba(0,0,0,0.04)',
+        'kpi-hover': '0 0 0 1px rgba(184,134,11,0.22), 0 4px 12px rgba(184,134,11,0.08)',
       },
       keyframes: {
         'fade-up': {

@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, History } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { InsightsSnapshot } from '@/lib/types'
+import SectionDivider from '@/components/SectionDivider'
 
 interface Props {
   history: InsightsSnapshot[]
@@ -142,9 +143,9 @@ export default function InsightsHistory({ history }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div>
+        <SectionDivider tag="History" />
         <div className="flex items-center gap-2">
-          <History size={16} className="text-text-tertiary" />
           <h2 className="text-xl font-semibold text-text-primary">수집 이력</h2>
           {history.length > 0 && (
             <span className="text-sm text-text-tertiary">{history.length}회</span>

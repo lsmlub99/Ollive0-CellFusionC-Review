@@ -2,6 +2,7 @@
 
 import type { Insights, KeywordItem } from '@/lib/types'
 import { SKIN_TYPE_MAP } from '@/lib/utils'
+import SectionDivider from '@/components/SectionDivider'
 
 interface InsightCardsProps {
   insights: Insights
@@ -73,17 +74,17 @@ export default function InsightCards({ insights, onKeywordClick, activeKeywords 
 
   return (
     <section className="space-y-3">
-      <h2 className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">
-        소비자가 말하는 것들
-      </h2>
+      <div className="mb-5">
+        <SectionDivider tag="Insights" />
+        <h2 className="text-xl font-semibold text-text-primary">소비자가 말하는 것들</h2>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* 긍정 키워드 */}
-        <div className="bg-surface border border-border rounded-lg p-4 md:p-5">
+        <div className="bg-surface border border-border border-t-2 border-t-emerald-200 rounded-lg p-4 md:p-5">
           <p className="text-xs font-semibold text-emerald-700 mb-3 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
             자주 언급되는 장점
-            {onKeywordClick && <span className="text-text-tertiary font-normal ml-1">· 클릭하면 리뷰 필터링</span>}
           </p>
           {insights.positive_keywords.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -106,11 +107,10 @@ export default function InsightCards({ insights, onKeywordClick, activeKeywords 
         </div>
 
         {/* 부정 키워드 */}
-        <div className="bg-surface border border-border rounded-lg p-4 md:p-5">
+        <div className="bg-surface border border-border border-t-2 border-t-orange-200 rounded-lg p-4 md:p-5">
           <p className="text-xs font-semibold text-orange-700 mb-3 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block" />
             아쉬운 점으로 언급
-            {onKeywordClick && <span className="text-text-tertiary font-normal ml-1">· 클릭하면 리뷰 필터링</span>}
           </p>
           {insights.negative_keywords.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -164,16 +164,16 @@ export default function InsightCards({ insights, onKeywordClick, activeKeywords 
 
       {/* 상위 상품 인사이트 */}
       {insights.top_product && (
-        <div className="bg-accent-bg border border-accent-border rounded-lg p-4 md:p-5">
-          <p className="text-xs font-semibold text-accent-fg mb-2 flex items-center gap-1.5">
-            <span>🏆</span> 가장 반응 좋은 상품
+        <div className="bg-accent-bg border border-accent-border border-t-2 border-t-accent/40 rounded-lg p-4 md:p-5">
+          <p className="font-label text-[10px] tracking-[0.14em] uppercase text-accent-fg/70 mb-2">
+            Top Product
           </p>
           <p className="text-sm font-semibold text-text-primary mb-1">
             {insights.top_product.goods_name.length > 45
               ? insights.top_product.goods_name.slice(0, 45) + '…'
               : insights.top_product.goods_name}
           </p>
-          <p className="text-xs text-text-tertiary mb-2">
+          <p className="text-xs text-text-tertiary mb-2.5">
             ★ {insights.top_product.avg_score} · 리뷰 {insights.top_product.cnt.toLocaleString()}개
           </p>
           {insights.top_product.sample_review && (

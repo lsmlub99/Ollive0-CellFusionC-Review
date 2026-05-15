@@ -1,5 +1,6 @@
 import type { ProductNegativeData } from '@/lib/types'
 import { extractShortName, scoreStars, scoreColor } from '@/lib/utils'
+import SectionDivider from '@/components/SectionDivider'
 
 interface Props {
   data: ProductNegativeData[]
@@ -10,21 +11,24 @@ export default function NegativeInsights({ data }: Props) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-xl font-semibold text-text-primary">불만 포인트</h2>
-        <span className="text-sm text-text-tertiary">상품별 1–2점 리뷰 분석</span>
+      <div>
+        <SectionDivider tag="Negative Points" />
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold text-text-primary">불만 포인트</h2>
+          <span className="text-sm text-text-tertiary">상품별 1–2점 리뷰 분석</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {data.map(product => (
-          <div key={product.goods_no} className="border border-red-100 rounded-lg bg-surface overflow-hidden">
+          <div key={product.goods_no} className="border border-red-100 border-t-2 border-t-red-300/60 rounded-lg bg-surface overflow-hidden">
             {/* 상품 헤더 */}
             <div className="flex items-center justify-between px-4 py-3 bg-red-50/60 border-b border-red-100">
               <span className="text-sm font-semibold text-text-primary">
                 {extractShortName(product.goods_name)}
               </span>
-              <span className="text-xs text-red-500 font-medium">
-                1–2점 {product.neg_count}개
+              <span className="font-label text-[10px] tracking-[0.12em] uppercase text-red-500">
+                {product.neg_count}건
               </span>
             </div>
 
