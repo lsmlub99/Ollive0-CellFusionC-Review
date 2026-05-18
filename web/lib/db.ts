@@ -440,7 +440,19 @@ export async function getMarketRankings(): Promise<MarketCategoryData[]> {
       FROM today t
       LEFT JOIN yesterday y
         ON t.goods_no = y.goods_no AND t.category_name = y.category_name
-      ORDER BY t.category_name, t.rank_position
+      ORDER BY
+        CASE t.category_name
+          WHEN '전체'          THEN 1
+          WHEN '스킨케어'      THEN 2
+          WHEN '마스크팩'      THEN 3
+          WHEN '클렌징'        THEN 4
+          WHEN '선케어'        THEN 5
+          WHEN '더모 코스메틱' THEN 6
+          WHEN '바디케어'      THEN 7
+          WHEN '맨즈에딧'      THEN 8
+          ELSE 99
+        END,
+        t.rank_position
     `)
 
     const map = new Map<string, MarketRankingEntry[]>()
