@@ -59,7 +59,7 @@ function CategoryChart({ items }: { items: ProductRankingData[] }) {
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
               <span className="text-xs text-text-primary font-medium">{extractShortName(item.goods_name)}</span>
-              <span className="font-serif text-lg font-normal" style={{ color: COLORS[i % COLORS.length] }}>
+              <span className="text-base font-semibold" style={{ color: COLORS[i % COLORS.length] }}>
                 {item.current != null ? `${item.current}위` : '-'}
               </span>
               {delta !== null && delta !== 0 && (
@@ -135,7 +135,7 @@ export default function RankingSection({ data }: Props) {
       <div className="space-y-6">
         {Array.from(byCategory.entries()).map(([cat, items]) => (
           <div key={cat} className="border border-border rounded-lg bg-surface p-4 md:p-5">
-            <p className="font-label text-[10px] tracking-[0.14em] uppercase text-accent/70 mb-3">
+            <p className="text-sm font-semibold text-text-primary mb-3">
               {cat}
             </p>
             <CategoryChart items={items} />

@@ -68,7 +68,7 @@ function RankEntry({ entry }: { entry: MarketRankingEntry }) {
         }`}
     >
       <span
-        className={`font-serif text-sm w-7 shrink-0 text-right leading-tight mt-0.5
+        className={`text-sm w-7 shrink-0 text-right leading-tight mt-0.5
           ${isTop3 ? 'text-accent font-semibold' : 'text-text-secondary font-normal'}`}
       >
         {entry.rank_position}
@@ -121,7 +121,7 @@ function CategoryPanel({ cat }: { cat: MarketCategoryData }) {
           ))}
           {newTop20.map(entry => (
             <div key={`n-${entry.goods_no}`} className="flex items-start gap-2 px-3 py-1.5 rounded-md hover:bg-gray-50">
-              <span className="font-serif text-sm w-7 shrink-0 text-right text-text-tertiary leading-tight mt-0.5">
+              <span className="text-sm w-7 shrink-0 text-right text-text-tertiary leading-tight mt-0.5">
                 {entry.rank_position}
               </span>
               <span className="flex-1 min-w-0 text-xs leading-snug break-keep text-text-primary">
