@@ -27,6 +27,7 @@ interface Props {
   rankings: ProductRankingData[]
   marketRankings: MarketCategoryData[]
   aiInsight: string
+  reviewInsight: string
 }
 
 const TABS = [
@@ -40,7 +41,7 @@ type TabId = typeof TABS[number]['id']
 
 export default function DashboardTabs({
   insights, timeSeries, negativeData, scoreDist, productStats,
-  summaries, insightsHistory, rankings, marketRankings, aiInsight
+  summaries, insightsHistory, rankings, marketRankings, aiInsight, reviewInsight
 }: Props) {
   const [active, setActive] = useState<TabId>('today')
 
@@ -109,6 +110,25 @@ export default function DashboardTabs({
         {/* 리뷰 분석 */}
         {active === 'reviews' && (
           <div className="space-y-10">
+            {/* AI 리뷰 인사이트 배너 */}
+            {reviewInsight && (
+              <div className="bg-accent-bg border border-accent-border rounded-lg px-4 py-3.5">
+                <p className="text-xs font-semibold text-accent mb-2.5">AI 리뷰 분석 인사이트</p>
+                <ul className="space-y-1.5">
+                  {reviewInsight
+                    .split('\n')
+                    .map(l => l.replace(/^[\s\-·•*\d.]+/, '').trim())
+                    .filter(l => l.length > 4)
+                    .map((msg, i) => (
+                      <li key={i} className="text-sm text-accent-fg flex items-start gap-1.5">
+                        <span className="text-accent shrink-0 mt-0.5 font-bold">·</span>
+                        <span className="leading-snug">{msg}</span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
+
             {timeSeries.length > 1 && (
               <section>
                 <div className="mb-5">
