@@ -6,6 +6,7 @@ import { useState } from 'react'
 
 interface Props {
   data: MarketCategoryData[]
+  aiInsight?: string
 }
 
 function generateInsights(data: MarketCategoryData[]): string[] {
@@ -102,7 +103,7 @@ function CategoryPanel({ cat }: { cat: MarketCategoryData }) {
     ? cat.entries.filter(e => e.prev_rank == null && e.rank_position <= 20).slice(0, 3)
     : []
 
-  const displayEntries = showAll ? cat.entries : cat.entries.slice(0, 20)
+  const displayEntries = showAll ? cat.entries : cat.entries.slice(0, 10)
 
   return (
     <div className="border border-border rounded-lg bg-surface p-4 space-y-4">
@@ -134,17 +135,17 @@ function CategoryPanel({ cat }: { cat: MarketCategoryData }) {
 
       <div className="space-y-0.5">
         <p className="text-[11px] font-medium text-text-secondary mb-1">
-          Top {showAll ? cat.entries.length : Math.min(20, cat.entries.length)}
+          Top {showAll ? cat.entries.length : Math.min(10, cat.entries.length)}
         </p>
         {displayEntries.map(entry => (
           <RankEntry key={entry.goods_no} entry={entry} />
         ))}
-        {cat.entries.length > 20 && (
+        {cat.entries.length > 10 && (
           <button
             onClick={() => setShowAll(v => !v)}
             className="w-full text-xs text-text-tertiary hover:text-text-secondary py-2 border-t border-border-subtle mt-1"
           >
-            {showAll ? '접기 ▲' : `${cat.entries.length - 20}개 더 보기 ▼`}
+            {showAll ? '접기 ▲' : `${cat.entries.length - 10}개 더 보기 ▼`}
           </button>
         )}
       </div>
@@ -152,10 +153,10 @@ function CategoryPanel({ cat }: { cat: MarketCategoryData }) {
   )
 }
 
-export default function MarketRankingSection({ data }: Props) {
+export default function MarketRankingSection({ data, aiInsight }: Props) {
   if (data.length === 0) return null
 
-  const insights = generateInsights(data)
+  const fallbackInsights = generateInsights(data)
 
   return (
     <div className="space-y-6">
@@ -168,18 +169,24 @@ export default function MarketRankingSection({ data }: Props) {
       </div>
 
       {/* 오늘의 시장 현황 배너 */}
-      <div className="bg-accent-bg border border-accent-border rounded-lg px-4 py-3">
-        <p className="text-xs font-semibold text-accent mb-2">
+      <div className="bg-accent-bg border border-accent-border rounded-lg px-4 py-3.5">
+        <p className="text-xs font-semibold text-accent mb-2.5">
           오늘의 시장 현황
         </p>
-        <ul className="space-y-1">
-          {insights.map((msg, i) => (
-            <li key={i} className="text-sm text-accent-fg flex items-start gap-1.5">
-              <span className="text-accent shrink-0 mt-0.5">·</span>
-              <span>{msg}</span>
-            </li>
-          ))}
-        </ul>
+        {aiInsight ? (
+          <div className="text-sm text-accent-fg leading-relaxed whitespace-pre-line">
+            {aiInsight}
+          </div>
+        ) : (
+          <ul className="space-y-1">
+            {fallbackInsights.map((msg, i) => (
+              <li key={i} className="text-sm text-accent-fg flex items-start gap-1.5">
+                <span className="text-accent shrink-0 mt-0.5">·</span>
+                <span>{msg}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* 카테고리별 3열 그리드 */}

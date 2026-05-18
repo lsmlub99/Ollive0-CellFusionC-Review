@@ -1,4 +1,5 @@
 import { getStats, getInsights, getScoreDist, getProductStats, getTimeSeries, getProductNegatives, getProductSummaries, getInsightsHistory, getProductRankings, getMarketRankings } from '@/lib/db'
+import { generateMarketInsight } from '@/lib/ai'
 import KPIStrip from '@/components/KPIStrip'
 import InsightCards from '@/components/InsightCards'
 import StatsAccordion from '@/components/StatsAccordion'
@@ -31,6 +32,10 @@ export default async function Page() {
     getProductRankings(),
     getMarketRankings(),
   ])
+
+  const marketInsight = marketRankings.length > 0
+    ? await generateMarketInsight(marketRankings)
+    : ''
 
   return (
     <div className="min-h-screen bg-background">
@@ -119,7 +124,7 @@ export default async function Page() {
         {/* 시장 전체 순위 — full width */}
         {marketRankings.length > 0 && (
           <div className="animate-fade-up" style={{ animationDelay: '120ms' }}>
-            <MarketRankingSection data={marketRankings} />
+            <MarketRankingSection data={marketRankings} aiInsight={marketInsight} />
           </div>
         )}
 
