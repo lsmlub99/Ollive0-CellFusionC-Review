@@ -4,7 +4,7 @@ import { pool } from './db'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const NO_MARKDOWN_SYSTEM = '당신은 마케팅 인사이트 작성 도우미입니다. 반드시 일반 텍스트만 사용하세요. #, ##, ###, **, __, >, `, ~ 등 마크다운 서식 기호와 이모지를 절대 사용하지 마세요. 각 항목은 줄바꿈으로 구분하고 - 로 시작하세요.'
+const NO_MARKDOWN_SYSTEM = '당신은 마케팅 인사이트 작성 도우미입니다. 출력 규칙을 반드시 지키세요: 1) 모든 줄은 반드시 "- "로 시작하세요. 2) 제목, 소제목, 대괄호 제목([...]) 작성 금지. 3) #, ##, **, __, >, `, ~, 이모지 등 서식 기호 사용 금지. 4) 각 bullet은 1~2문장으로 간결하게, 구체적 수치 포함. 5) bullet 사이 빈 줄 없이 연속 작성.'
 
 // 6시 수집 → 'am', 16시 수집 → 'pm'
 function getSlot(): 'am' | 'pm' {
@@ -65,8 +65,11 @@ ${topNeg.length ? topNeg.join('\n') : '없음'}
 
 자사 긍정 키워드: ${posKw}
 
-위 랭킹과 리뷰 데이터를 종합해 셀퓨전씨 담당자가 오늘 가장 주목해야 할 핵심 사항을 4~5개로 작성하라.
-시장 위협, 자사 순위, 리뷰 이슈를 균형있게 반영하고 구체적 수치를 포함하라.`
+위 데이터를 바탕으로 셀퓨전씨 담당자가 오늘 당장 확인해야 할 핵심 사항을 4~5개 작성하라.
+- 각 bullet: "- [현황 수치] → [오늘 해야 할 행동]" 형식으로 간결하게
+- 시장 위협, 자사 순위 변동, 리뷰 불만 중 가장 중요한 것만 선별
+- bullet당 2문장 이내, 수치 반드시 포함
+- 제목줄 작성 금지, 바로 - 로 시작`
 }
 
 export async function generateDailyBrief(
@@ -89,7 +92,7 @@ export async function generateDailyBrief(
   try {
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 500,
+      max_tokens: 800,
       system: NO_MARKDOWN_SYSTEM,
       messages: [{ role: 'user', content: buildDailyBriefPrompt(marketData, insights, negativeData) }],
     })
@@ -161,8 +164,11 @@ ${fallers.length ? fallers.join('\n') : '없음'}
 셀퓨전씨 포지션:
 ${ours.length ? ours.join(', ') : 'TOP100 없음'}
 
-위 데이터를 바탕으로 셀퓨전씨 마케터에게 필요한 시장 인사이트를 5~7개로 작성하라.
-주목할 시장 트렌드, 셀퓨전씨 포지션 평가, 단기 대응 제안을 수치와 함께 포함하라.`
+위 데이터를 바탕으로 셀퓨전씨 마케터에게 필요한 시장 인사이트를 5~7개 작성하라.
+- 각 bullet: "- [관찰된 사실 + 수치] → [셀퓨전씨 대응 방향]" 형식
+- 주목할 트렌드, 경쟁 위협, 자사 포지션을 구체적 수치와 함께
+- bullet당 2문장 이내
+- 제목줄 작성 금지, 바로 - 로 시작`
 }
 
 export async function generateMarketInsight(data: MarketCategoryData[]): Promise<string> {
@@ -182,7 +188,7 @@ export async function generateMarketInsight(data: MarketCategoryData[]): Promise
   try {
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
+      max_tokens: 1000,
       system: NO_MARKDOWN_SYSTEM,
       messages: [{ role: 'user', content: buildMarketPrompt(data) }],
     })
@@ -231,8 +237,11 @@ ${negKw}
 상품별 불만 상세:
 ${productIssues.join('\n')}
 
-위 실구매 리뷰 데이터를 바탕으로 셀퓨전씨 제품 담당자에게 필요한 인사이트를 5~7개로 작성하라.
-고객이 반복적으로 언급하는 개선 요구사항, 불만이 집중된 상품과 원인, 강점 유지 전략, 신제품/리뉴얼 방향을 수치와 키워드를 인용하여 작성하라.`
+위 실구매 리뷰 데이터를 바탕으로 셀퓨전씨 제품 담당자에게 필요한 인사이트를 5~7개 작성하라.
+- 각 bullet: "- [키워드/수치 인용] → [개선 또는 활용 방향]" 형식
+- 반복되는 불만 이슈, 집중 불만 상품, 강점 유지 전략, 리뉴얼 방향 포함
+- bullet당 2문장 이내, 반드시 키워드와 수치 인용
+- 제목줄 작성 금지, 바로 - 로 시작`
 }
 
 export async function generateReviewInsight(
@@ -254,7 +263,7 @@ export async function generateReviewInsight(
   try {
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
+      max_tokens: 1000,
       system: NO_MARKDOWN_SYSTEM,
       messages: [{ role: 'user', content: buildReviewPrompt(insights, negativeData) }],
     })

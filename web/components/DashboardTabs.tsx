@@ -81,8 +81,8 @@ export default function DashboardTabs({
                   <ul className="space-y-2">
                     {dailyBrief
                       .split('\n')
-                      .map(l => l.replace(/^#+\s*/, '').replace(/\*\*/g, '').replace(/^[\s\-·•*\d.]+/, '').trim())
-                      .filter(l => l.length > 4)
+                      .map(l => l.replace(/^\[.*?\]\s*/, '').replace(/^#+\s*/, '').replace(/\*\*/g, '').replace(/^[\s\-·•*\d.]+/, '').trim())
+                      .filter(l => l.length > 10)
                       .map((msg, i) => (
                         <li key={i} className="text-sm text-accent-fg flex items-start gap-2">
                           <span className="text-accent shrink-0 mt-0.5 font-bold text-base leading-none">·</span>
@@ -118,8 +118,8 @@ export default function DashboardTabs({
                 <ul className="space-y-1.5">
                   {reviewInsight
                     .split('\n')
-                    .map(l => l.replace(/^#+\s*/, '').replace(/\*\*/g, '').replace(/^[\s\-·•*\d.]+/, '').trim())
-                    .filter(l => l.length > 4 && !/^#+/.test(l))
+                    .map(l => l.replace(/^\[.*?\]\s*/, '').replace(/^#+\s*/, '').replace(/\*\*/g, '').replace(/^[\s\-·•*\d.]+/, '').trim())
+                    .filter(l => l.length > 10)
                     .map((msg, i) => (
                       <li key={i} className="text-sm text-accent-fg flex items-start gap-1.5">
                         <span className="text-accent shrink-0 mt-0.5 font-bold">·</span>
