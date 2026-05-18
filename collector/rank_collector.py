@@ -26,21 +26,23 @@ HEADERS = {
 }
 
 CATEGORIES = [
-    ('선케어',      '900000100100001', '10000010011'),
-    ('스킨/토너',   '900000100100001', '100000100010013'),
-    ('로션/크림',   '900000100100001', '100000100010016'),
-    ('에센스/세럼', '900000100100001', '100000100010014'),
-    ('마스크팩',    '900000100100001', '10000010009'),
-    ('클렌징',      '900000100100001', '10000010010'),
+    ('전체',       '900000100100001', None),
+    ('스킨케어',   '900000100100001', '10000010001'),
+    ('마스크팩',   '900000100100001', '10000010009'),
+    ('클렌징',     '900000100100001', '10000010010'),
+    ('선케어',     '900000100100001', '10000010011'),
 ]
 
 ROWS_PER_PAGE = 100
 
 
-def fetch_ranking(disp_cat: str, flt_cat: str) -> list[dict]:
+def fetch_ranking(disp_cat: str, flt_cat: str | None) -> list[dict]:
     """카테고리 베스트 페이지에서 {goods_no, name} 순위 리스트 반환"""
+    params = {'dispCatNo': disp_cat, 'pageIdx': 1, 'rowsPerPage': ROWS_PER_PAGE}
+    if flt_cat:
+        params['fltDispCatNo'] = flt_cat
     kwargs = dict(
-        params={'dispCatNo': disp_cat, 'fltDispCatNo': flt_cat, 'pageIdx': 1, 'rowsPerPage': ROWS_PER_PAGE},
+        params=params,
         headers=HEADERS,
         timeout=15,
     )
