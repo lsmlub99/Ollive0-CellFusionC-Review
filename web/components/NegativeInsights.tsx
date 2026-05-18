@@ -21,13 +21,13 @@ export default function NegativeInsights({ data }: Props) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {data.map(product => (
-          <div key={product.goods_no} className="border border-red-100 border-t-2 border-t-red-300/60 rounded-lg bg-surface overflow-hidden">
+          <div key={product.goods_no} className="border border-orange-100 border-t-2 border-t-orange-300/60 rounded-lg bg-surface overflow-hidden">
             {/* 상품 헤더 */}
-            <div className="flex items-center justify-between px-4 py-3 bg-red-50/60 border-b border-red-100">
+            <div className="flex items-center justify-between px-4 py-3 bg-orange-50/50 border-b border-orange-100">
               <span className="text-sm font-semibold text-text-primary">
                 {extractShortName(product.goods_name)}
               </span>
-              <span className="font-label text-[10px] tracking-[0.12em] uppercase text-red-500">
+              <span className="text-xs font-semibold text-orange-600">
                 {product.neg_count}건
               </span>
             </div>
@@ -44,9 +44,9 @@ export default function NegativeInsights({ data }: Props) {
                         key={kw.word}
                         className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-medium"
                         style={{
-                          backgroundColor: `rgba(220,38,38,${0.06 + intensity * 0.10})`,
-                          borderColor: `rgba(220,38,38,${0.2 + intensity * 0.3})`,
-                          color: `rgba(153,27,27,${0.7 + intensity * 0.3})`,
+                          backgroundColor: `rgba(234,88,12,${0.06 + intensity * 0.10})`,
+                          borderColor: `rgba(234,88,12,${0.2 + intensity * 0.3})`,
+                          color: `rgba(154,52,18,${0.75 + intensity * 0.25})`,
                         }}
                       >
                         #{kw.word}

@@ -29,7 +29,7 @@ function KeywordTag({
 }) {
   const range = maxCnt - minCnt || 1
   const ratio = (kw.cnt - minCnt) / range
-  const fontSize = Math.round(12 + ratio * 8)
+  const fontSize = Math.round(11 + ratio * 4)
   const opacity = isActive ? 1 : 0.5 + ratio * 0.5
   const pct = total > 0 ? (kw.cnt / total * 100).toFixed(1) : '0.0'
 

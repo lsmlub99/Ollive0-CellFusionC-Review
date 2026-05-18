@@ -38,20 +38,20 @@ function SnapshotRow({ snap, prev }: { snap: InsightsSnapshot; prev?: InsightsSn
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-border-subtle/40 transition-colors"
       >
         {/* 날짜 */}
-        <span className="text-xs text-text-tertiary w-36 shrink-0">{formatDate(snap.snapshot_at)}</span>
+        <span className="text-xs text-text-tertiary w-28 sm:w-36 shrink-0">{formatDate(snap.snapshot_at)}</span>
 
         {/* 신규 리뷰 */}
-        <span className={`text-xs font-semibold shrink-0 w-16 ${snap.new_reviews > 0 ? 'text-emerald-600' : 'text-text-tertiary'}`}>
-          {snap.new_reviews > 0 ? `+${snap.new_reviews.toLocaleString()}` : '변화없음'}
+        <span className={`text-xs font-semibold shrink-0 w-14 ${snap.new_reviews > 0 ? 'text-emerald-600' : 'text-text-tertiary'}`}>
+          {snap.new_reviews > 0 ? `+${snap.new_reviews.toLocaleString()}` : '-'}
         </span>
 
         {/* 누적 */}
-        <span className="text-xs text-text-secondary shrink-0 w-20">
+        <span className="hidden sm:block text-xs text-text-secondary shrink-0 w-20">
           총 {snap.total_reviews.toLocaleString()}개
         </span>
 
         {/* 평점 */}
-        <span className="text-xs font-semibold shrink-0" style={{ color: scoreColor }}>
+        <span className="text-xs font-semibold shrink-0 w-10" style={{ color: scoreColor }}>
           ★ {snap.avg_score}
         </span>
 
@@ -161,12 +161,12 @@ export default function InsightsHistory({ history }: Props) {
       ) : (
         <>
           {/* 헤더 */}
-          <div className="hidden sm:flex items-center gap-3 px-4 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">
-            <span className="w-36">날짜</span>
-            <span className="w-16">신규</span>
-            <span className="w-20">누적</span>
-            <span className="w-12">평점</span>
-            <span>주요 키워드</span>
+          <div className="flex items-center gap-3 px-4 text-2xs font-semibold text-text-tertiary uppercase tracking-wider">
+            <span className="w-28 sm:w-36 shrink-0">날짜</span>
+            <span className="w-14 shrink-0">신규</span>
+            <span className="hidden sm:block w-20 shrink-0">누적</span>
+            <span className="w-10 shrink-0">평점</span>
+            <span className="hidden sm:block">주요 키워드</span>
           </div>
 
           <div className="space-y-1.5">
