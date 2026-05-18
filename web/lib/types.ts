@@ -97,6 +97,13 @@ export interface ProductSummary {
   generated_at: string
 }
 
+export interface ProductRankingData {
+  goods_no: string
+  goods_name: string
+  category_name: string
+  history: { date: string; rank: number }[]
+}
+
 export interface InsightsSnapshot {
   id: number
   snapshot_at: string

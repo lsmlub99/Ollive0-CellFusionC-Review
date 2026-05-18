@@ -1,5 +1,5 @@
 import { Pool } from 'pg'
-import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, InsightsSnapshot } from './types'
+import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, InsightsSnapshot, ProductRankingData } from './types'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -367,6 +367,43 @@ export async function getProductSummaries(): Promise<ProductSummary[]> {
       generated_at: r.generated_at,
       ...JSON.parse(r.summary_json),
     }))
+  } catch {
+    return []
+  }
+}
+
+export async function getProductRankings(): Promise<ProductRankingData[]> {
+  try {
+    const rows = await query<{
+      goods_no: string; goods_name: string; category_name: string
+      rank_date: string; rank_position: string
+    }>(`
+      SELECT pr.goods_no, p.goods_name, pr.category_name,
+             pr.rank_date::text, pr.rank_position
+      FROM product_rankings pr
+      JOIN products p ON pr.goods_no = p.goods_no
+      WHERE pr.rank_date >= CURRENT_DATE - INTERVAL '60 days'
+      ORDER BY pr.category_name, pr.goods_no, pr.rank_date
+    `)
+
+    // 상품+카테고리별로 그룹핑
+    const map = new Map<string, ProductRankingData>()
+    for (const r of rows) {
+      const key = `${r.goods_no}__${r.category_name}`
+      if (!map.has(key)) {
+        map.set(key, {
+          goods_no: r.goods_no,
+          goods_name: r.goods_name,
+          category_name: r.category_name,
+          history: [],
+        })
+      }
+      map.get(key)!.history.push({
+        date: r.rank_date.slice(0, 10),
+        rank: Number(r.rank_position),
+      })
+    }
+    return Array.from(map.values())
   } catch {
     return []
   }

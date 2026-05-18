@@ -8,4 +8,5 @@ if not exist logs mkdir logs
 
 echo [%date% %time%] ?? ?? >> %LOG_FILE%
 "C:\Program Files\Python311\python.exe" -u -m collector.pipeline >> %LOG_FILE% 2>&1
+"C:\Program Files\Python311\python.exe" -u -m collector.rank_collector >> %LOG_FILE% 2>&1
 echo [%date% %time%] ?? ?? >> %LOG_FILE%
