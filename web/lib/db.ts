@@ -1,5 +1,5 @@
 import { Pool } from 'pg'
-import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, InsightsSnapshot, ProductRankingData, MarketCategoryData, MarketRankingEntry, NewProductData, NegativeAlertData } from './types'
+import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, InsightsSnapshot, ProductRankingData, MarketCategoryData, MarketRankingEntry, NewProductData, NegativeAlertData, OurRankingTimelineEntry, PromoStatusData } from './types'
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -582,6 +582,63 @@ export async function getNewProducts(withinDays = 30): Promise<NewProductData[]>
         top_keywords: kwMap.get(p.goods_no) ?? [],
       }
     }).filter(p => p.total_reviews > 0)
+  } catch {
+    return []
+  }
+}
+
+export async function getOurRankingTimeline(): Promise<OurRankingTimelineEntry[]> {
+  try {
+    return await query<OurRankingTimelineEntry>(`
+      SELECT
+        mr.rank_hour,
+        mr.category_name,
+        mr.rank_position,
+        mr.goods_no,
+        mr.goods_name
+      FROM market_rankings mr
+      JOIN products p ON mr.goods_no = p.goods_no
+      WHERE mr.rank_date = CURRENT_DATE
+      ORDER BY mr.goods_no, mr.category_name, mr.rank_hour
+    `)
+  } catch {
+    return []
+  }
+}
+
+export async function getPromoStatus(): Promise<PromoStatusData[]> {
+  try {
+    const rows = await query<{
+      promo_type: string
+      goods_no: string
+      goods_name: string | null
+      rank_position: string | null
+      is_ours: boolean
+    }>(`
+      SELECT promo_type, goods_no, goods_name, rank_position, is_ours
+      FROM promo_items
+      WHERE collected_at = CURRENT_DATE
+      ORDER BY promo_type, rank_position NULLS LAST
+    `)
+
+    const typeMap = new Map<string, { our_items: PromoStatusData['our_items']; total_count: number }>()
+    for (const r of rows) {
+      if (!typeMap.has(r.promo_type)) typeMap.set(r.promo_type, { our_items: [], total_count: 0 })
+      const entry = typeMap.get(r.promo_type)!
+      entry.total_count++
+      if (r.is_ours) {
+        entry.our_items.push({
+          goods_no: r.goods_no,
+          goods_name: r.goods_name ?? r.goods_no,
+          rank_position: r.rank_position != null ? Number(r.rank_position) : null,
+        })
+      }
+    }
+
+    return Array.from(typeMap.entries()).map(([promo_type, data]) => ({
+      promo_type,
+      ...data,
+    }))
   } catch {
     return []
   }

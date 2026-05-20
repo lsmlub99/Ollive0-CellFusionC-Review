@@ -4,7 +4,8 @@ import { useState } from 'react'
 import type {
   Insights, TimeSeriesPoint, ProductNegativeData, ScoreDist,
   ProductStats, ProductSummary, InsightsSnapshot, ProductRankingData,
-  MarketCategoryData, NewProductData, NegativeAlertData
+  MarketCategoryData, NewProductData, NegativeAlertData,
+  OurRankingTimelineEntry, PromoStatusData
 } from '@/lib/types'
 import InsightCards from '@/components/InsightCards'
 import NegativeInsights from '@/components/NegativeInsights'
@@ -15,6 +16,8 @@ import InsightsHistory from '@/components/InsightsHistory'
 import RankingSection from '@/components/RankingSection'
 import MarketRankingSection from '@/components/MarketRankingSection'
 import NewProductInsights from '@/components/NewProductInsights'
+import TodayRankingTimeline from '@/components/TodayRankingTimeline'
+import PromoSection from '@/components/PromoSection'
 import SectionDivider from '@/components/SectionDivider'
 
 interface Props {
@@ -32,6 +35,8 @@ interface Props {
   dailyBrief: string
   newProducts: NewProductData[]
   negativeAlerts: NegativeAlertData[]
+  todayTimeline: OurRankingTimelineEntry[]
+  promoStatus: PromoStatusData[]
 }
 
 const TABS = [
@@ -46,7 +51,7 @@ type TabId = typeof TABS[number]['id']
 export default function DashboardTabs({
   insights, timeSeries, negativeData, scoreDist, productStats,
   summaries, insightsHistory, rankings, marketRankings, aiInsight, reviewInsight, dailyBrief,
-  newProducts, negativeAlerts
+  newProducts, negativeAlerts, todayTimeline, promoStatus
 }: Props) {
   const [active, setActive] = useState<TabId>('today')
 
@@ -96,6 +101,16 @@ export default function DashboardTabs({
                   </ul>
                 </div>
               </div>
+            )}
+
+            {/* 프로모션 입점 현황 */}
+            {promoStatus.length > 0 && (
+              <PromoSection data={promoStatus} />
+            )}
+
+            {/* 오늘 시간별 순위 타임라인 */}
+            {todayTimeline.length > 0 && (
+              <TodayRankingTimeline data={todayTimeline} />
             )}
 
             {/* 셀퓨전씨 자사 순위 */}

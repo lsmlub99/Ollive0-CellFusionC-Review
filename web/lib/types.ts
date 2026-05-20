@@ -140,6 +140,20 @@ export interface NegativeAlertData {
   sample: string
 }
 
+export interface OurRankingTimelineEntry {
+  rank_hour: number
+  category_name: string
+  rank_position: number
+  goods_no: string
+  goods_name: string
+}
+
+export interface PromoStatusData {
+  promo_type: string
+  our_items: { goods_no: string; goods_name: string; rank_position: number | null }[]
+  total_count: number
+}
+
 export interface InsightsSnapshot {
   id: number
   snapshot_at: string

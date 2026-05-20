@@ -182,6 +182,22 @@ def init_db(conn=None):
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_briefs_date
                     ON daily_briefs(brief_date)
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS promo_items (
+                    id            SERIAL PRIMARY KEY,
+                    promo_type    VARCHAR(20) NOT NULL,
+                    collected_at  DATE NOT NULL DEFAULT CURRENT_DATE,
+                    rank_position SMALLINT,
+                    goods_no      VARCHAR(20) NOT NULL,
+                    goods_name    VARCHAR(200),
+                    is_ours       BOOLEAN NOT NULL DEFAULT false,
+                    UNIQUE (promo_type, collected_at, goods_no)
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_promo_items_date
+                    ON promo_items(collected_at DESC)
+            """)
 
     if conn is not None:
         _run(conn)
