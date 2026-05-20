@@ -1,11 +1,14 @@
 """
-올리브영 프로모션 수집기 — 오늘의 특가(하루특가)
+올리브영 프로모션 수집기 — 올영픽 + 오늘의 특가(하루특가)
 실행: python collector/promo_collector.py
 
-오특 AJAX 엔드포인트:
-  GET /store/main/getHotdealPagingListAjax.do
-  params: date=YYYYMMDD, pageIdx=1,2,..., fltCondition=02, fltDispCatNo=, prdSort=rank
-  응답: HTML (세션 쿠키 필요 — 메인 페이지 방문 후 AJAX 요청)
+올영픽: getPlanShopDetail.do?dispCatNo=500000100018752
+  - 월 단위 큐레이션, 같은 dispCatNo에 상품만 교체되는 구조
+  - HTML 직접 파싱 (AJAX 불필요)
+
+오특: getHotdealPagingListAjax.do
+  - 일 단위, 세션 쿠키 필요 (메인 페이지 방문 후 요청)
+  - pageIdx=1,2,... 페이지네이션
 """
 import os
 import sys
@@ -31,42 +34,66 @@ from db.schema import get_conn, init_db
 BASE_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
     'Accept-Language': 'ko-KR,ko;q=0.9',
+    'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9',
 }
 
+# 올영픽 — 매월 갱신되는 기획전 페이지 (dispCatNo 고정, 상품만 교체)
+# 다음 달 변경 시 여기서 dispCatNo 업데이트 필요할 수 있음
+OLIVEPICK_URL = 'https://www.oliveyoung.co.kr/store/planshop/getPlanShopDetail.do'
+OLIVEPICK_CAT = '500000100018752'
+
+# 오특
 HOTDEAL_MAIN_URL = 'https://www.oliveyoung.co.kr/store/main/getHotdealList.do'
 HOTDEAL_AJAX_URL = 'https://www.oliveyoung.co.kr/store/main/getHotdealPagingListAjax.do'
-
 HOTDEAL_CONDITIONS = [
     ('today_deal', '오늘의 특가', '02'),
 ]
-
 MAX_PAGES = 15
 
 
 def make_session():
     if _USE_CFFI:
-        session = cf_requests.Session(impersonate='chrome120')
-    else:
-        session = cf_requests.Session()
-    return session
+        return cf_requests.Session(impersonate='chrome120')
+    return cf_requests.Session()
 
 
-def warmup_session(session) -> bool:
-    """메인 페이지 방문해서 Cloudflare 세션 쿠키 취득"""
-    try:
-        r = session.get(
-            HOTDEAL_MAIN_URL,
-            headers={**BASE_HEADERS, 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.9'},
-            timeout=20,
-        )
-        return r.status_code == 200
-    except Exception as e:
-        print(f'  세션 워밍업 실패: {e}')
-        return False
+def parse_prd_info(html: str) -> list[dict]:
+    """공통 .prd_info 셀렉터로 상품 목록 파싱"""
+    soup = BeautifulSoup(html, 'html.parser')
+    seen = set()
+    results = []
+    for item in soup.select('.prd_info'):
+        parent = item.find_parent('li')
+        link = (parent or item).select_one('a[href*="goodsNo"]')
+        if not link:
+            continue
+        m = re.search(r'goodsNo=([A-Z0-9]+)', link.get('href', ''))
+        if not m or m.group(1) in seen:
+            continue
+        goods_no = m.group(1)
+        seen.add(goods_no)
+        name_el = item.select_one('.tx_name, .prd_name')
+        name = name_el.get_text(strip=True) if name_el else ''
+        results.append({'goods_no': goods_no, 'name': name})
+    return results
+
+
+def fetch_olivepick(session) -> list[dict]:
+    """올영픽 기획전 페이지 전체 파싱"""
+    r = session.get(
+        OLIVEPICK_URL,
+        params={'dispCatNo': OLIVEPICK_CAT},
+        headers=BASE_HEADERS,
+        timeout=20,
+    )
+    if r.status_code != 200:
+        print(f'  올영픽 HTTP {r.status_code}')
+        return []
+    return parse_prd_info(r.text)
 
 
 def fetch_hotdeal_page(session, today_str: str, flt_condition: str, page_idx: int) -> list[dict]:
-    """오특 AJAX 단일 페이지 → 상품 리스트 반환"""
+    """오특 AJAX 단일 페이지"""
     params = {
         'date': today_str,
         'pageIdx': page_idx,
@@ -82,23 +109,18 @@ def fetch_hotdeal_page(session, today_str: str, flt_condition: str, page_idx: in
     }
     r = session.get(HOTDEAL_AJAX_URL, params=params, headers=headers, timeout=15)
     if r.status_code != 200:
-        print(f'    페이지 {page_idx} HTTP {r.status_code}')
         return []
 
+    # 오특은 data-impression 속성으로 파싱 (더 안정적)
     soup = BeautifulSoup(r.text, 'html.parser')
     seen = set()
     results = []
-
-    # data-impression="GOODS_NO^카테고리^순위" 형태로 goods_no 추출
     for li in soup.select('li[data-impression]'):
         imp = li.get('data-impression', '')
-        parts = imp.split('^')
-        goods_no = parts[0].strip() if parts else ''
+        goods_no = imp.split('^')[0].strip()
         if not goods_no or not re.match(r'^[A-Z0-9]+$', goods_no) or goods_no in seen:
             continue
         seen.add(goods_no)
-
-        # 상품명: img alt 또는 텍스트
         name_el = li.select_one('.tx_name, .prd_name, img.pic-thumb')
         if name_el and name_el.name == 'img':
             name = name_el.get('alt', '')
@@ -107,9 +129,7 @@ def fetch_hotdeal_page(session, today_str: str, flt_condition: str, page_idx: in
         else:
             link = li.select_one('a[href*="goodsNo"]')
             name = link.get('data-ref-goodsnm', '') if link else ''
-
         results.append({'goods_no': goods_no, 'name': name})
-
     return results
 
 
@@ -125,6 +145,31 @@ def fetch_all_hotdeal(session, today_str: str, flt_condition: str) -> list[dict]
     return all_items
 
 
+def save_items(conn, ptype: str, items: list[dict], our_goods: set):
+    with conn.cursor() as cur:
+        cur.execute(
+            'DELETE FROM promo_items WHERE promo_type = %s AND collected_at = CURRENT_DATE',
+            (ptype,)
+        )
+        for rank, item in enumerate(items, 1):
+            is_ours = item['goods_no'] in our_goods
+            cur.execute("""
+                INSERT INTO promo_items
+                    (promo_type, collected_at, rank_position, goods_no, goods_name, is_ours)
+                VALUES (%s, CURRENT_DATE, %s, %s, %s, %s)
+                ON CONFLICT (promo_type, collected_at, goods_no) DO UPDATE SET
+                    rank_position = EXCLUDED.rank_position,
+                    goods_name    = EXCLUDED.goods_name,
+                    is_ours       = EXCLUDED.is_ours
+            """, (ptype, rank, item['goods_no'], item['name'], is_ours))
+
+    our_hits = [(i + 1, it) for i, it in enumerate(items) if it['goods_no'] in our_goods]
+    if our_hits:
+        print('  자사 입점: ' + ', '.join(f"{r}위 {it['name']}" for r, it in our_hits))
+    else:
+        print('  자사 미입점')
+
+
 def run():
     today = date.today()
     today_str = today.strftime('%Y%m%d')
@@ -132,10 +177,11 @@ def run():
 
     session = make_session()
 
-    print('세션 초기화 중...')
-    ok = warmup_session(session)
-    if not ok:
-        print('세션 워밍업 실패 — 수집 중단')
+    # 세션 워밍업 (오특용 Cloudflare 쿠키 취득)
+    print('세션 초기화...')
+    r = session.get(HOTDEAL_MAIN_URL, headers=BASE_HEADERS, timeout=20)
+    if r.status_code != 200:
+        print(f'세션 워밍업 실패 ({r.status_code})')
         return
     print('세션 OK\n')
     time.sleep(2)
@@ -152,43 +198,31 @@ def run():
 
         print(f'자사 상품 {len(our_goods)}개 기준\n')
 
-        for ptype, label, flt_cond in HOTDEAL_CONDITIONS:
-            print(f'[{label}] 수집 중 (fltCondition={flt_cond})...')
+        # ── 올영픽 ──
+        print('[올영픽] 수집 중...')
+        try:
+            items = fetch_olivepick(session)
+            print(f'  총 {len(items)}개 상품')
+            if items:
+                save_items(conn, 'olivepick', items, our_goods)
+            else:
+                print('  경고: 상품 없음 — dispCatNo 확인 필요')
+        except Exception as e:
+            print(f'  오류: {e}')
+        time.sleep(2)
 
+        # ── 오늘의 특가 ──
+        for ptype, label, flt_cond in HOTDEAL_CONDITIONS:
+            print(f'[{label}] 수집 중...')
             try:
                 items = fetch_all_hotdeal(session, today_str, flt_cond)
                 print(f'  총 {len(items)}개 상품')
-
-                if not items:
-                    print('  경고: 상품 없음')
-                    continue
-
-                with conn.cursor() as cur:
-                    cur.execute(
-                        'DELETE FROM promo_items WHERE promo_type = %s AND collected_at = CURRENT_DATE',
-                        (ptype,)
-                    )
-                    for rank, item in enumerate(items, 1):
-                        is_ours = item['goods_no'] in our_goods
-                        cur.execute("""
-                            INSERT INTO promo_items
-                                (promo_type, collected_at, rank_position, goods_no, goods_name, is_ours)
-                            VALUES (%s, CURRENT_DATE, %s, %s, %s, %s)
-                            ON CONFLICT (promo_type, collected_at, goods_no) DO UPDATE SET
-                                rank_position = EXCLUDED.rank_position,
-                                goods_name    = EXCLUDED.goods_name,
-                                is_ours       = EXCLUDED.is_ours
-                        """, (ptype, rank, item['goods_no'], item['name'], is_ours))
-
-                our_hits = [(i + 1, it) for i, it in enumerate(items) if it['goods_no'] in our_goods]
-                if our_hits:
-                    print('  자사 입점: ' + ', '.join(f"{r}위 {it['name']}" for r, it in our_hits))
+                if items:
+                    save_items(conn, ptype, items, our_goods)
                 else:
-                    print('  자사 미입점 (오늘)')
-
+                    print('  경고: 상품 없음')
             except Exception as e:
                 print(f'  오류: {e}')
-
             time.sleep(2)
 
         print('\n=== 완료 ===')
