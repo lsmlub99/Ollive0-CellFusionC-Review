@@ -617,7 +617,7 @@ export async function getOurRankingTimeline(): Promise<OurRankingTimelineEntry[]
         mr.goods_name
       FROM market_rankings mr
       JOIN products p ON mr.goods_no = p.goods_no
-      WHERE mr.rank_date = CURRENT_DATE
+      WHERE mr.rank_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
       ORDER BY mr.goods_no, mr.category_name, mr.rank_hour
     `)
   } catch {
@@ -843,7 +843,7 @@ export async function getProductTopicInsights(): Promise<ProductTopicData[]> {
     const cached = await query<{ goods_no: string; topics_json: string }>(`
       SELECT goods_no, topics_json
       FROM product_topic_insights
-      WHERE goods_no = ANY($1) AND insight_date = CURRENT_DATE
+      WHERE goods_no = ANY($1) AND insight_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
     `, [goodsNos])
 
     const cachedMap = new Map(cached.map(r => [r.goods_no, JSON.parse(r.topics_json)]))
@@ -865,7 +865,7 @@ export async function getProductTopicInsights(): Promise<ProductTopicData[]> {
           try {
             await client.query(`
               INSERT INTO product_topic_insights (goods_no, topics_json, insight_date)
-              VALUES ($1, $2, CURRENT_DATE)
+              VALUES ($1, $2, (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date)
               ON CONFLICT (goods_no, insight_date) DO UPDATE SET topics_json = EXCLUDED.topics_json
             `, [prod.goods_no, JSON.stringify(topics)])
           } finally {
