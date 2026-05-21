@@ -27,3 +27,10 @@ jobs:
           BRAND_CODE: ${{ secrets.BRAND_CODE }}
           SWIT_WEBHOOK_URL: ${{ secrets.SWIT_WEBHOOK_URL }}
         run: python -m collector.promo_collector
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          curl -s -X POST -H "Content-type: application/json" \
+            --data "{\"text\":\"[프로모 수집 실패] GitHub Actions 워크플로우 오류\n실행 로그: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            "${{ secrets.SWIT_WEBHOOK_URL }}"
