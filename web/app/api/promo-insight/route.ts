@@ -6,14 +6,17 @@ export async function POST(req: NextRequest) {
   try {
     const { month, products } = await req.json() as {
       month: string
-      products: { goods_name: string }[]
+      products: { goods_name: string; category_name?: string | null }[]
     }
 
     if (!month || !products?.length) {
       return NextResponse.json({ error: 'month and products required' }, { status: 400 })
     }
 
-    const result = await generateOlivepickInsight(month, products.map(p => p.goods_name))
+    const result = await generateOlivepickInsight(
+      month,
+      products.map(p => ({ name: p.goods_name, category: p.category_name }))
+    )
     if (!result) {
       return NextResponse.json({ error: 'AI generation failed' }, { status: 500 })
     }

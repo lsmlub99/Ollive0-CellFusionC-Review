@@ -201,7 +201,7 @@ export default function OlivepickMonthAccordion({ month, defaultOpen = false, on
                   <textarea
                     value={editSummary}
                     onChange={e => setEditSummary(e.target.value)}
-                    rows={2}
+                    rows={4}
                     className="w-full mt-0.5 text-xs border border-border rounded px-2 py-1 bg-background text-text-primary focus:outline-none focus:border-accent resize-none"
                   />
                 </div>
