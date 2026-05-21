@@ -88,31 +88,6 @@ export default function DashboardTabs({
         {/* 오늘 현황 */}
         {active === 'today' && (
           <div className="space-y-10">
-            {/* ⚠️ 긴급 알람 — 부정 급증 (B-1) */}
-            {negativeAlerts.length > 0 && (
-              <div>
-                <SectionDivider tag="⚠️ 긴급 알람" />
-                <div className="space-y-2">
-                  {negativeAlerts.map(a => (
-                    <div key={a.goods_no} className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-                      <span className="text-red-500 font-bold text-base shrink-0 mt-0.5">!</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-red-700">{a.goods_name}</p>
-                        <p className="text-xs text-red-600 mt-0.5">
-                          최근 7일 부정 리뷰 {a.recent_neg}건
-                          {a.prev_neg > 0 && ` · 전주 대비 +${a.increase_pct}%`}
-                          {a.top_keywords.length > 0 && ` · 주요 키워드: ${a.top_keywords.map(k => k.word).join(', ')}`}
-                        </p>
-                        {a.sample && (
-                          <p className="text-xs text-red-500/80 mt-1 truncate">"{a.sample}"</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* 오늘의 통합 브리핑 */}
             {dailyBrief && (() => {
               const latestHour = todayTimeline.length > 0
@@ -153,9 +128,34 @@ export default function DashboardTabs({
               )
             })()}
 
+            {/* ⚠️ 긴급 알람 — 부정 급증 */}
+            {negativeAlerts.length > 0 && (
+              <div>
+                <SectionDivider tag="⚠️ 긴급 알람" />
+                <div className="space-y-2">
+                  {negativeAlerts.map(a => (
+                    <div key={a.goods_no} className="flex items-start gap-3 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3.5">
+                      <span className="text-red-600 font-black text-lg shrink-0 mt-0.5 leading-none">!</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-red-700">{a.goods_name}</p>
+                        <p className="text-sm text-red-600 font-medium mt-0.5">
+                          최근 7일 부정 리뷰 {a.recent_neg}건
+                          {a.prev_neg > 0 && ` · 전주 대비 +${a.increase_pct}%`}
+                          {a.top_keywords.length > 0 && ` · 주요 키워드: ${a.top_keywords.map(k => k.word).join(', ')}`}
+                        </p>
+                        {a.sample && (
+                          <p className="text-xs text-red-500 mt-1.5 truncate italic">"{a.sample}"</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 프로모션 입점 현황 */}
             {promoStatus.length > 0 && (
-              <PromoSection data={promoStatus} />
+              <PromoSection data={promoStatus} onNavigate={id => setActive(id as TabId)} />
             )}
 
             {/* 오늘 시간별 순위 타임라인 (A-4: 항상 렌더, 빈 상태는 내부 처리) */}

@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import type { PromoStatusData } from '@/lib/types'
 import SectionDivider from '@/components/SectionDivider'
 
 interface Props {
   data: PromoStatusData[]
+  onNavigate: (tabId: string) => void
 }
 
 const PROMO_LABELS: Record<string, string> = {
@@ -14,9 +14,14 @@ const PROMO_LABELS: Record<string, string> = {
   daily_special: '하루특가',
 }
 
-const DEFAULT_SHOW = 10
+const TAB_ID: Record<string, string> = {
+  olivepick:  'olivepick',
+  today_deal: 'today_deal',
+}
 
-export default function PromoSection({ data }: Props) {
+const DEFAULT_SHOW = 5
+
+export default function PromoSection({ data, onNavigate }: Props) {
   if (data.length === 0) return null
 
   return (
@@ -27,18 +32,18 @@ export default function PromoSection({ data }: Props) {
       </div>
       <div className="grid grid-cols-2 gap-4">
         {data.map(d => (
-          <PromoCard key={d.promo_type} data={d} />
+          <PromoCard key={d.promo_type} data={d} onNavigate={onNavigate} />
         ))}
       </div>
     </section>
   )
 }
 
-function PromoCard({ data: d }: { data: PromoStatusData }) {
-  const [expanded, setExpanded] = useState(false)
+function PromoCard({ data: d, onNavigate }: { data: PromoStatusData; onNavigate: (tabId: string) => void }) {
   const label = PROMO_LABELS[d.promo_type] ?? d.promo_type
   const hasOurs = d.our_items.length > 0
-  const visibleItems = expanded ? d.top_items : d.top_items.slice(0, DEFAULT_SHOW)
+  const visibleItems = d.top_items.slice(0, DEFAULT_SHOW)
+  const tabId = TAB_ID[d.promo_type]
 
   return (
     <div className={`rounded-lg border overflow-hidden ${
@@ -61,38 +66,35 @@ function PromoCard({ data: d }: { data: PromoStatusData }) {
         )}
       </div>
 
-      {/* 상품 목록 */}
+      {/* 상품 목록 (상위 5개) */}
       <ul className="divide-y divide-black/5">
         {visibleItems.map(item => (
           <li
             key={item.goods_no}
-            className={`flex items-start gap-2 px-4 py-2 ${
+            className={`flex items-center gap-2 px-4 py-1.5 ${
               item.is_ours ? 'bg-emerald-100/60' : ''
             }`}
           >
-            <span className={`text-xs leading-snug flex-1 ${
+            <span className={`text-xs leading-snug flex-1 truncate ${
               item.is_ours ? 'font-semibold text-emerald-800' : 'text-text-secondary'
             }`}>
               {item.goods_name}
             </span>
             {item.is_ours && (
-              <span className="text-[10px] font-semibold text-emerald-600 shrink-0 mt-0.5">자사</span>
+              <span className="text-[10px] font-semibold text-emerald-600 shrink-0">자사</span>
             )}
           </li>
         ))}
       </ul>
 
-      {/* 더 보기 / 접기 */}
-      {d.top_items.length > DEFAULT_SHOW && (
+      {/* 상세보기 */}
+      {tabId && (
         <button
-          onClick={() => setExpanded(v => !v)}
-          className="w-full px-4 py-2 text-xs text-text-tertiary hover:text-text-secondary transition-colors text-right border-t border-black/5"
+          onClick={() => onNavigate(tabId)}
+          className="w-full px-4 py-2 text-xs font-medium text-accent hover:text-accent-fg transition-colors text-right border-t border-black/5 bg-accent-bg/40 hover:bg-accent-bg"
         >
-          {expanded ? '접기 ∧' : `${d.top_items.length - DEFAULT_SHOW}개 더 보기 ∨`}
+          상세보기 →
         </button>
-      )}
-      {d.top_items.length === 0 && (
-        <p className="px-4 py-3 text-xs text-text-tertiary">상품 정보 없음</p>
       )}
     </div>
   )
