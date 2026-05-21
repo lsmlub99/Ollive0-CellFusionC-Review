@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { OlivepickMonth, PromoMonthlyInsight } from '@/lib/types'
+import type { OlivepickMonth, PromoMonthlyInsight, PromoInsightHistoryEntry } from '@/lib/types'
 import { extractShortName } from '@/lib/utils'
 
 interface Props {
@@ -18,6 +18,9 @@ export default function OlivepickMonthAccordion({ month, defaultOpen = false, on
   const [editTags, setEditTags] = useState('')
   const [editSummary, setEditSummary] = useState('')
   const [saving, setSaving] = useState(false)
+  const [history, setHistory] = useState<PromoInsightHistoryEntry[] | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const hasCats = month.category_counts.length > 0
 
@@ -39,6 +42,8 @@ export default function OlivepickMonthAccordion({ month, defaultOpen = false, on
       }
       setInsight(newInsight)
       onInsightUpdate(month.month, newInsight)
+      setEditing(false)
+      setHistory(null) // 히스토리 캐시 초기화 (다음 열 때 새로 로드)
     } catch {
       alert('AI 분석 생성에 실패했습니다.')
     } finally {
@@ -71,10 +76,27 @@ export default function OlivepickMonthAccordion({ month, defaultOpen = false, on
       setInsight(updated)
       onInsightUpdate(month.month, updated)
       setEditing(false)
+      setHistory(null)
     } catch {
       alert('저장에 실패했습니다.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleHistoryToggle() {
+    if (historyOpen) { setHistoryOpen(false); return }
+    setHistoryOpen(true)
+    if (history !== null) return
+    setHistoryLoading(true)
+    try {
+      const res = await fetch(`/api/promo-insight?month=${month.month}`)
+      const data: PromoInsightHistoryEntry[] = await res.json()
+      setHistory(data)
+    } catch {
+      setHistory([])
+    } finally {
+      setHistoryLoading(false)
     }
   }
 
@@ -181,11 +203,16 @@ export default function OlivepickMonthAccordion({ month, defaultOpen = false, on
                 {insight.summary && (
                   <p className="text-xs text-text-secondary leading-relaxed">{insight.summary}</p>
                 )}
+                {insight.generated_at && (
+                  <p className="text-[10px] text-text-tertiary">
+                    {new Date(insight.generated_at).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 생성
+                  </p>
+                )}
               </div>
             )}
 
             {insight && editing && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div>
                   <label className="text-[10px] text-text-tertiary">태그 (쉼표로 구분)</label>
                   <input
@@ -205,7 +232,7 @@ export default function OlivepickMonthAccordion({ month, defaultOpen = false, on
                     className="w-full mt-0.5 text-xs border border-border rounded px-2 py-1 bg-background text-text-primary focus:outline-none focus:border-accent resize-none"
                   />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <button
                     onClick={handleSave}
                     disabled={saving}
@@ -219,7 +246,56 @@ export default function OlivepickMonthAccordion({ month, defaultOpen = false, on
                   >
                     취소
                   </button>
+                  <div className="ml-auto flex flex-col items-end gap-0.5">
+                    <button
+                      onClick={handleGenerate}
+                      disabled={generating}
+                      className="text-xs font-semibold text-amber-700 border border-amber-300 bg-amber-50 px-3 py-1 rounded hover:bg-amber-100 transition-colors disabled:opacity-50"
+                    >
+                      {generating ? 'AI 재생성 중...' : 'AI 재생성'}
+                    </button>
+                    <p className="text-[10px] text-text-tertiary">현재 내용은 이력에 보존됩니다</p>
+                  </div>
                 </div>
+              </div>
+            )}
+
+            {/* 이전 분석 이력 */}
+            {insight && (
+              <div className="mt-3 border-t border-border/50 pt-2">
+                <button
+                  onClick={handleHistoryToggle}
+                  className="text-[10px] text-text-tertiary hover:text-text-secondary flex items-center gap-1"
+                >
+                  <span>이전 분석 이력</span>
+                  <span>{historyOpen ? '▲' : '▼'}</span>
+                </button>
+
+                {historyOpen && (
+                  <div className="mt-2 space-y-3">
+                    {historyLoading && (
+                      <p className="text-[10px] text-text-tertiary animate-pulse">불러오는 중...</p>
+                    )}
+                    {!historyLoading && history?.length === 0 && (
+                      <p className="text-[10px] text-text-tertiary">이전 이력이 없습니다</p>
+                    )}
+                    {!historyLoading && history && history.length > 0 && history.map(h => (
+                      <div key={h.id} className="bg-background rounded p-2.5 space-y-1.5">
+                        <div className="flex flex-wrap gap-1">
+                          {h.concept_tags.map(tag => (
+                            <span key={tag} className="text-[10px] text-text-tertiary bg-border/40 border border-border px-1.5 py-0.5 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                          <span className="ml-auto text-[10px] text-text-tertiary">
+                            {new Date(h.saved_at).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-text-tertiary leading-relaxed">{h.summary}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

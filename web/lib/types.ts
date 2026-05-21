@@ -187,6 +187,14 @@ export interface PromoMonthlyInsight {
   generated_at: string | null
 }
 
+export interface PromoInsightHistoryEntry {
+  id: number
+  month: string
+  concept_tags: string[]
+  summary: string
+  saved_at: string
+}
+
 export interface OlivepickMonth {
   month: string
   products: OlivepickProduct[]

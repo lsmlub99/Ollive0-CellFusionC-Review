@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { savePromoMonthlyInsight } from '@/lib/db'
+import { savePromoMonthlyInsight, getPromoInsightHistory } from '@/lib/db'
 import { generateOlivepickInsight } from '@/lib/ai'
+
+export async function GET(req: NextRequest) {
+  const month = req.nextUrl.searchParams.get('month')
+  if (!month) return NextResponse.json({ error: 'month required' }, { status: 400 })
+  const history = await getPromoInsightHistory(month)
+  return NextResponse.json(history)
+}
 
 export async function POST(req: NextRequest) {
   try {

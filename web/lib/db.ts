@@ -956,6 +956,12 @@ export async function getPromoMonthlyInsight(month: string): Promise<PromoMonthl
 
 export async function savePromoMonthlyInsight(month: string, concept_tags: string[], summary: string): Promise<void> {
   await query(`
+    INSERT INTO promo_monthly_insights_history (month, concept_tags, summary, saved_at)
+    SELECT month, concept_tags, summary, NOW()
+    FROM promo_monthly_insights
+    WHERE month = $1
+  `, [month])
+  await query(`
     INSERT INTO promo_monthly_insights (month, concept_tags, summary, generated_at, updated_at)
     VALUES ($1, $2, $3, NOW(), NOW())
     ON CONFLICT (month) DO UPDATE SET
@@ -963,6 +969,22 @@ export async function savePromoMonthlyInsight(month: string, concept_tags: strin
       summary      = EXCLUDED.summary,
       updated_at   = NOW()
   `, [month, concept_tags, summary])
+}
+
+export async function getPromoInsightHistory(month: string): Promise<{ id: number; month: string; concept_tags: string[]; summary: string; saved_at: string }[]> {
+  try {
+    const rows = await query<{
+      id: number; month: string; concept_tags: string[]; summary: string; saved_at: string
+    }>(`
+      SELECT id, month, concept_tags, summary, saved_at::text
+      FROM promo_monthly_insights_history
+      WHERE month = $1
+      ORDER BY saved_at DESC
+    `, [month])
+    return rows
+  } catch {
+    return []
+  }
 }
 
 export async function getProductTopicInsights(): Promise<ProductTopicData[]> {

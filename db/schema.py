@@ -222,6 +222,19 @@ def init_db(conn=None):
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS promo_monthly_insights_history (
+                    id           SERIAL PRIMARY KEY,
+                    month        CHAR(7) NOT NULL,
+                    concept_tags TEXT[]  NOT NULL DEFAULT '{}',
+                    summary      TEXT    NOT NULL DEFAULT '',
+                    saved_at     TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_promo_insights_history_month
+                    ON promo_monthly_insights_history(month, saved_at DESC)
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS product_topic_insights (
                     id           SERIAL PRIMARY KEY,
                     goods_no     TEXT NOT NULL,
