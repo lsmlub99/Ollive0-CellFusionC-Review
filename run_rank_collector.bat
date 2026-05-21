@@ -6,6 +6,6 @@ set PYTHONIOENCODING=utf-8
 set LOG_FILE=logs\rank_%date:~0,4%%date:~5,2%%date:~8,2%.txt
 if not exist logs mkdir logs
 
-echo [%date% %time%] 랭킹 수집 시작 >> %LOG_FILE%
+echo [%date% %time%] rank collector start >> %LOG_FILE%
 "C:\Program Files\Python311\python.exe" -u -m collector.rank_collector >> %LOG_FILE% 2>&1
-echo [%date% %time%] 랭킹 수집 완료 >> %LOG_FILE%
+echo [%date% %time%] rank collector done >> %LOG_FILE%
