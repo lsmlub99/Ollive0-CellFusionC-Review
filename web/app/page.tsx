@@ -4,6 +4,14 @@ import KPIStrip from '@/components/KPIStrip'
 import DashboardTabs from '@/components/DashboardTabs'
 
 export const revalidate = 300
+export const maxDuration = 60
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ])
+}
 
 function formatLastUpdated(ts: string | null): string {
   if (!ts) return '-'
@@ -40,9 +48,9 @@ export default async function Page() {
   const productTopics = await getProductTopicInsights()
 
   const [marketInsight, reviewInsight, dailyBrief] = await Promise.all([
-    marketRankings.length > 0 ? generateMarketInsight(marketRankings) : Promise.resolve(''),
-    generateReviewInsight(insights, negativeData),
-    marketRankings.length > 0 ? generateDailyBrief(marketRankings, insights, negativeData) : Promise.resolve(''),
+    withTimeout(marketRankings.length > 0 ? generateMarketInsight(marketRankings) : Promise.resolve(''), 25000, ''),
+    withTimeout(generateReviewInsight(insights, negativeData), 25000, ''),
+    withTimeout(marketRankings.length > 0 ? generateDailyBrief(marketRankings, insights, negativeData) : Promise.resolve(''), 25000, ''),
   ])
 
   return (
