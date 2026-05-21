@@ -48,9 +48,9 @@ const TABS = [
   { id: 'today',      label: '오늘 현황' },
   { id: 'reviews',    label: '리뷰 분석' },
   { id: 'market',     label: '시장 랭킹' },
-  { id: 'history',    label: '이력' },
   { id: 'olivepick',  label: '올영픽' },
   { id: 'today_deal', label: '오특' },
+  { id: 'history',    label: '이력' },
 ] as const
 
 type TabId = typeof TABS[number]['id']
