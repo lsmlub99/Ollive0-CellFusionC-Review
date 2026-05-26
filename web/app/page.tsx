@@ -16,10 +16,15 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 function formatLastUpdated(ts: string | null): string {
   if (!ts) return '-'
   const d = new Date(ts)
+  if (isNaN(d.getTime())) return '-'
   const now = Date.now()
   const diffMs = now - d.getTime()
+  if (diffMs < 0) return '방금 전'
   const diffH = Math.floor(diffMs / 3600000)
-  const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  // KST = UTC + 9h
+  const kstH = (d.getUTCHours() + 9) % 24
+  const kstM = d.getUTCMinutes()
+  const hhmm = `${String(kstH).padStart(2, '0')}:${String(kstM).padStart(2, '0')}`
   if (diffMs < 3600000) return '방금 전'
   if (diffH < 24) return `${diffH}시간 전 (${hhmm})`
   if (diffH < 48) return `어제 ${hhmm}`

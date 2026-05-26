@@ -38,12 +38,16 @@ export async function getStats(): Promise<Stats> {
 
   const [[rankRow], [promoRow]] = await Promise.all([
     query<{ ts: string | null }>(`
-      SELECT (rank_date + (rank_hour || ' hours')::interval)::text AS ts
+      SELECT to_char(
+        (rank_date + (rank_hour || ' hours')::interval) AT TIME ZONE 'Asia/Seoul',
+        'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+      ) AS ts
       FROM market_rankings
       ORDER BY rank_date DESC, rank_hour DESC LIMIT 1
     `),
     query<{ ts: string | null }>(`
-      SELECT MAX(collected_at)::text AS ts FROM promo_items
+      SELECT to_char(MAX(collected_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS ts
+      FROM promo_items
     `),
   ])
 
