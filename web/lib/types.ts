@@ -27,6 +27,8 @@ export interface Stats {
   repurchase_count: number
   five_star_count: number
   last_updated: string | null
+  rank_last_updated: string | null
+  promo_last_updated: string | null
 }
 
 export interface ProductStats {

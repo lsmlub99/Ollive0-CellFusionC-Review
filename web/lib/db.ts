@@ -36,16 +36,29 @@ export async function getStats(): Promise<Stats> {
     FROM reviews r
   `)
 
+  const [[rankRow], [promoRow]] = await Promise.all([
+    query<{ ts: string | null }>(`
+      SELECT (rank_date + (rank_hour || ' hours')::interval)::text AS ts
+      FROM market_rankings
+      ORDER BY rank_date DESC, rank_hour DESC LIMIT 1
+    `),
+    query<{ ts: string | null }>(`
+      SELECT MAX(collected_at)::text AS ts FROM promo_items
+    `),
+  ])
+
   const total = Number(totals.total_reviews)
   return {
-    total_reviews:   total,
-    total_products:  Number(totals.total_products),
-    avg_score:       Number(totals.avg_score) || 0,
-    five_star_count: Number(totals.five_star_count),
-    repurchase_count: Number(totals.repurchase_count),
-    five_star_pct:   total > 0 ? Math.round(Number(totals.five_star_count) / total * 1000) / 10 : 0,
-    repurchase_pct:  total > 0 ? Math.round(Number(totals.repurchase_count) / total * 1000) / 10 : 0,
-    last_updated:    totals.last_updated,
+    total_reviews:        total,
+    total_products:       Number(totals.total_products),
+    avg_score:            Number(totals.avg_score) || 0,
+    five_star_count:      Number(totals.five_star_count),
+    repurchase_count:     Number(totals.repurchase_count),
+    five_star_pct:        total > 0 ? Math.round(Number(totals.five_star_count) / total * 1000) / 10 : 0,
+    repurchase_pct:       total > 0 ? Math.round(Number(totals.repurchase_count) / total * 1000) / 10 : 0,
+    last_updated:         totals.last_updated,
+    rank_last_updated:    rankRow?.ts ?? null,
+    promo_last_updated:   promoRow?.ts ?? null,
   }
 }
 

@@ -67,11 +67,21 @@ export default async function Page() {
               리뷰 인사이트
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs text-text-tertiary">
-              {formatLastUpdated(stats.last_updated)} 업데이트
-            </span>
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0">
+              {([
+                { label: '리뷰',   ts: stats.last_updated },
+                { label: '랭킹',   ts: stats.rank_last_updated },
+                { label: '프로모', ts: stats.promo_last_updated },
+              ] as const).map(({ label, ts }) =>
+                ts ? (
+                  <span key={label} className="text-xs text-text-tertiary whitespace-nowrap">
+                    {label} <span className="text-text-secondary">{formatLastUpdated(ts)}</span>
+                  </span>
+                ) : null
+              )}
+            </div>
           </div>
         </div>
       </header>
