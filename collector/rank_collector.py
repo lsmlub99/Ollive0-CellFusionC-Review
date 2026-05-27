@@ -73,6 +73,10 @@ def fetch_ranking(disp_cat: str, flt_cat: str | None) -> list[dict]:
     else:
         r = cf_requests.get('https://www.oliveyoung.co.kr/store/main/getBestList.do', **kwargs)
 
+    if r.status_code != 200:
+        raise ValueError(f"HTTP {r.status_code}")
+    if len(r.text) < 1000:
+        raise ValueError(f"응답이 너무 짧음 ({len(r.text)}bytes) — 차단 의심")
     soup = BeautifulSoup(r.text, 'html.parser')
     seen = set()
     results = []

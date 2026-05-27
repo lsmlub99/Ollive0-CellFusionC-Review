@@ -364,21 +364,27 @@ export async function getProductNegatives(): Promise<ProductNegativeData[]> {
     ) t WHERE rn <= 2
   `, [goodsNos])
 
+  const kwMap = new Map<string, typeof kwRows>()
+  for (const k of kwRows) {
+    if (!kwMap.has(k.goods_no)) kwMap.set(k.goods_no, [])
+    kwMap.get(k.goods_no)!.push(k)
+  }
+  const sampleMap = new Map<string, typeof sampleRows>()
+  for (const s of sampleRows) {
+    if (!sampleMap.has(s.goods_no)) sampleMap.set(s.goods_no, [])
+    sampleMap.get(s.goods_no)!.push(s)
+  }
+
   return topProducts.map(p => ({
     goods_no:   p.goods_no,
     goods_name: p.goods_name,
     neg_count:  Number(p.neg_count),
-    keywords: kwRows
-      .filter(k => k.goods_no === p.goods_no)
-      .slice(0, 5)
-      .map(k => ({ word: k.word, cnt: Number(k.cnt) })),
-    samples: sampleRows
-      .filter(s => s.goods_no === p.goods_no)
-      .map(s => ({
-        content:    s.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-        score:      Number(s.score),
-        created_at: s.created_at,
-      })),
+    keywords: (kwMap.get(p.goods_no) ?? []).slice(0, 5).map(k => ({ word: k.word, cnt: Number(k.cnt) })),
+    samples: (sampleMap.get(p.goods_no) ?? []).map(s => ({
+      content:    s.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+      score:      Number(s.score),
+      created_at: s.created_at,
+    })),
   }))
 }
 

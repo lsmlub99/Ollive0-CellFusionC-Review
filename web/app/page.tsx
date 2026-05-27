@@ -13,6 +13,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   ])
 }
 
+async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+  try { return await fn() } catch { return fallback }
+}
+
 function formatLastUpdated(ts: string | null): string {
   if (!ts) return '-'
   const d = new Date(ts)
@@ -32,25 +36,29 @@ function formatLastUpdated(ts: string | null): string {
 }
 
 export default async function Page() {
+  const statsDefault = { total_reviews: 0, total_products: 0, avg_score: 0, five_star_pct: 0, repurchase_pct: 0, repurchase_count: 0, five_star_count: 0, last_updated: null, rank_last_updated: null, promo_last_updated: null }
+  const insightsDefault = { positive_keywords: [], negative_keywords: [], total_reviews: 0, skin_dist: [], top_product: null }
+  const rankingsDefault = { best: [], avg: [], weekly: [], lastCollected: {} }
+
   const [stats, insights, scoreDist, productStats, timeSeries, negativeData, summaries, insightsHistory, rankingsData, marketRankings, newProducts, negativeAlerts, todayTimeline, promoStatus, productKeywords] = await Promise.all([
-    getStats(),
-    getInsights(),
-    getScoreDist(),
-    getProductStats(),
-    getTimeSeries(),
-    getProductNegatives(),
-    getProductSummaries(),
-    getInsightsHistory(),
-    getProductRankingsByMode(),
-    getMarketRankings(),
-    getNewProducts(),
-    getNegativeAlerts(),
-    getOurRankingTimeline(),
-    getPromoStatus(),
-    getProductKeywords(),
+    safe(getStats, statsDefault),
+    safe(getInsights, insightsDefault),
+    safe(getScoreDist, []),
+    safe(getProductStats, []),
+    safe(getTimeSeries, []),
+    safe(getProductNegatives, []),
+    safe(getProductSummaries, []),
+    safe(getInsightsHistory, []),
+    safe(getProductRankingsByMode, rankingsDefault),
+    safe(getMarketRankings, []),
+    safe(getNewProducts, []),
+    safe(getNegativeAlerts, []),
+    safe(getOurRankingTimeline, []),
+    safe(getPromoStatus, []),
+    safe(getProductKeywords, []),
   ])
 
-  const productTopics = await getProductTopicInsights()
+  const productTopics = await safe(getProductTopicInsights, [])
 
   const [marketInsight, reviewInsight, dailyBrief] = await Promise.all([
     withTimeout(marketRankings.length > 0 ? generateMarketInsight(marketRankings) : Promise.resolve(''), 25000, ''),
