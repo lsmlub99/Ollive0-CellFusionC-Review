@@ -238,12 +238,19 @@ def run():
 
     # 세션 워밍업 (오특용 Cloudflare 쿠키 취득)
     print('세션 초기화...')
-    r = session.get(HOTDEAL_MAIN_URL, headers=BASE_HEADERS, timeout=20)
-    if r.status_code != 200:
-        print(f'세션 워밍업 실패 ({r.status_code})')
-        return
-    print('세션 OK\n')
-    time.sleep(2)
+    warmup_ok = False
+    try:
+        r = session.get(HOTDEAL_MAIN_URL, headers=BASE_HEADERS, timeout=20)
+        if r.status_code == 200:
+            warmup_ok = True
+            print('세션 OK\n')
+            time.sleep(2)
+        else:
+            print(f'세션 워밍업 실패 ({r.status_code}) — 오특 수집 건너뜀')
+            send_alert(f'[OY] 프로모 세션 차단 ({r.status_code})\n오늘의 특가 수집 불가 — 올영픽은 계속 진행합니다.')
+    except Exception as e:
+        print(f'세션 워밍업 오류: {e} — 오특 수집 건너뜀')
+        send_alert(f'[OY] 프로모 세션 오류\n{e}')
 
     conn = get_conn()
     conn.autocommit = True
@@ -278,6 +285,9 @@ def run():
 
         # ── 오늘의 특가 ──
         for ptype, label, flt_cond in HOTDEAL_CONDITIONS:
+            if not warmup_ok:
+                print(f'[{label}] 세션 워밍업 실패로 건너뜀')
+                continue
             print(f'[{label}] 수집 중...')
             try:
                 items = fetch_all_hotdeal(session, today_str, flt_cond)
