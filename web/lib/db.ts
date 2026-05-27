@@ -526,26 +526,35 @@ export async function getMarketRankings(): Promise<MarketCategoryData[]> {
       delta: string | null
       is_ours: boolean
     }>(`
-      WITH latest_date AS (
-        SELECT MAX(rank_date) AS d FROM market_rankings
-      ),
-      prev_date AS (
-        SELECT MAX(rank_date) AS d FROM market_rankings
-        WHERE rank_date < (SELECT d FROM latest_date)
-      ),
-      today_best AS (
-        SELECT category_name, goods_no, goods_name,
-               MIN(rank_position) AS rank_position
+      WITH latest_per_cat AS (
+        SELECT DISTINCT ON (category_name)
+          category_name, rank_date, rank_hour
         FROM market_rankings
-        WHERE rank_date = (SELECT d FROM latest_date)
-        GROUP BY category_name, goods_no, goods_name
+        ORDER BY category_name, rank_date DESC, rank_hour DESC
       ),
-      yesterday_best AS (
-        SELECT category_name, goods_no,
-               MIN(rank_position) AS rank_position
-        FROM market_rankings
-        WHERE rank_date = (SELECT d FROM prev_date)
-        GROUP BY category_name, goods_no
+      prev_per_cat AS (
+        SELECT DISTINCT ON (mr.category_name)
+          mr.category_name, mr.rank_date, mr.rank_hour
+        FROM market_rankings mr
+        JOIN latest_per_cat lpc ON mr.category_name = lpc.category_name
+        WHERE (mr.rank_date, mr.rank_hour) < (lpc.rank_date, lpc.rank_hour)
+        ORDER BY mr.category_name, mr.rank_date DESC, mr.rank_hour DESC
+      ),
+      today_snap AS (
+        SELECT mr.category_name, mr.goods_no, mr.goods_name, mr.rank_position
+        FROM market_rankings mr
+        JOIN latest_per_cat lpc ON
+          mr.category_name = lpc.category_name AND
+          mr.rank_date = lpc.rank_date AND
+          mr.rank_hour = lpc.rank_hour
+      ),
+      yesterday_snap AS (
+        SELECT mr.category_name, mr.goods_no, mr.rank_position
+        FROM market_rankings mr
+        JOIN prev_per_cat ppc ON
+          mr.category_name = ppc.category_name AND
+          mr.rank_date = ppc.rank_date AND
+          mr.rank_hour = ppc.rank_hour
       )
       SELECT
         t.category_name,
@@ -555,8 +564,8 @@ export async function getMarketRankings(): Promise<MarketCategoryData[]> {
         y.rank_position                           AS prev_rank,
         y.rank_position - t.rank_position         AS delta,
         EXISTS(SELECT 1 FROM products p WHERE p.goods_no = t.goods_no) AS is_ours
-      FROM today_best t
-      LEFT JOIN yesterday_best y
+      FROM today_snap t
+      LEFT JOIN yesterday_snap y
         ON t.goods_no = y.goods_no AND t.category_name = y.category_name
       ORDER BY
         CASE t.category_name
