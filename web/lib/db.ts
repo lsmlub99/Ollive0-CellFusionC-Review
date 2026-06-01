@@ -1152,3 +1152,109 @@ export async function getProductTopicInsights(): Promise<ProductTopicData[]> {
     return []
   }
 }
+
+// ─────────────────────────────────────────
+// 쿠팡 데이터 (chat 툴용)
+// ─────────────────────────────────────────
+
+const cpPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 2,
+  idleTimeoutMillis: 10000,
+  options: '-c search_path=coupang',
+})
+
+async function cpQuery<T>(sql: string, params?: unknown[]): Promise<T[]> {
+  const client = await cpPool.connect()
+  try {
+    return (await client.query(sql, params)).rows as T[]
+  } finally {
+    client.release()
+  }
+}
+
+export async function getCoupangStats() {
+  const [row] = await cpQuery<{
+    total_products: number
+    total_reviews: number
+    avg_rating: number
+    last_updated: string | null
+  }>(`
+    SELECT
+      (SELECT COUNT(*)::int FROM products)      AS total_products,
+      (SELECT COUNT(*)::int FROM reviews)       AS total_reviews,
+      ROUND(AVG(r.rating)::numeric, 2)::float  AS avg_rating,
+      MAX(r.collected_at)::text                AS last_updated
+    FROM reviews r
+  `)
+  return row ?? { total_products: 0, total_reviews: 0, avg_rating: 0, last_updated: null }
+}
+
+export async function getCoupangProductStats() {
+  return cpQuery<{
+    product_id: string
+    product_name: string
+    review_count: number
+    avg_rating: number
+  }>(`
+    SELECT
+      p.product_id,
+      p.product_name,
+      COUNT(r.review_id)::int                AS review_count,
+      ROUND(AVG(r.rating)::numeric, 1)::float AS avg_rating
+    FROM products p
+    LEFT JOIN reviews r ON r.product_id = p.product_id
+    WHERE p.product_name IS NOT NULL
+    GROUP BY p.product_id, p.product_name
+    ORDER BY review_count DESC
+    LIMIT 30
+  `)
+}
+
+export async function getCoupangRankings() {
+  const search = await cpQuery<{
+    keyword: string
+    rank_date: string
+    product_name: string
+    rank_position: number
+    is_ad: boolean
+  }>(`
+    SELECT keyword, rank_date::text, product_name, rank_position, is_ad
+    FROM search_rankings
+    WHERE rank_date = (SELECT MAX(rank_date) FROM search_rankings)
+    ORDER BY keyword, rank_position
+    LIMIT 50
+  `)
+  const category = await cpQuery<{
+    category_name: string
+    rank_date: string
+    rank_hour: number
+    product_name: string
+    rank_position: number
+  }>(`
+    SELECT category_name, rank_date::text, rank_hour, product_name, rank_position
+    FROM category_rankings
+    WHERE rank_date = (SELECT MAX(rank_date) FROM category_rankings)
+    ORDER BY category_name, rank_position
+    LIMIT 100
+  `)
+  return { search, category }
+}
+
+export async function getCoupangRecentReviews(productId?: string) {
+  const cond = productId ? 'AND r.product_id = $1' : ''
+  const params = productId ? [productId] : []
+  return cpQuery<{
+    product_name: string
+    rating: number
+    content: string
+    created_at: string
+  }>(`
+    SELECT p.product_name, r.rating, r.content, r.created_at
+    FROM reviews r
+    JOIN products p ON r.product_id = p.product_id
+    WHERE r.content IS NOT NULL ${cond}
+    ORDER BY r.created_at DESC
+    LIMIT 40
+  `, params)
+}

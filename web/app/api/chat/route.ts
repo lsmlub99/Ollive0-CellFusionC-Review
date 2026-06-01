@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import {
   getStats, getMarketRankings, getPromoStatus, getNegativeAlerts,
   getProductStats, getInsights, getNewProducts, getOurRankingTimeline,
+  getCoupangStats, getCoupangProductStats, getCoupangRankings, getCoupangRecentReviews,
 } from '@/lib/db'
 
 export const maxDuration = 60
@@ -13,6 +14,27 @@ function getClient() {
   if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   return _client
 }
+
+const SYSTEM_COUPANG = `당신은 쿠팡 채널 전문 분석가입니다. 셀퓨전씨의 쿠팡 판매 데이터를 분석하고 전략을 제안하는 역할입니다.
+
+당신의 스타일:
+· 쿠팡 실구매 리뷰, 검색순위, 카테고리 베스트셀러 데이터를 기반으로 답변합니다.
+· 리뷰 평점과 내용에서 소비자의 실제 반응과 개선 포인트를 찾아냅니다.
+· 검색순위와 카테고리 순위에서 노출 전략과 경쟁 포지션을 분석합니다.
+· 마지막엔 항상 "그래서 셀퓨전씨는 이렇게 해야 합니다"로 끝냅니다.
+
+도구 선택:
+· "전체 현황 / 총 리뷰 / 평균 평점" → get_coupang_stats
+· "상품별 리뷰 수 / 평점 비교" → get_coupang_product_stats
+· "검색순위 / 카테고리 순위" → get_coupang_rankings
+· "리뷰 내용 / 소비자 반응 / 불만" → get_coupang_reviews
+
+출력 형식 (반드시 준수):
+· **, __, ##, >, 백틱, ~ 같은 마크다운 기호 절대 사용 금지.
+· 이모지 사용 금지.
+· 항목은 "· " 또는 숫자로 시작.
+· 6~10줄 이내. 수치는 맥락과 함께.
+· 한국어로 답변.`
 
 const SYSTEM = `당신은 K-뷰티 브랜드 전략 전문가입니다. 셀퓨전씨의 전속 인사이트 파트너로, 올리브영 내 시장 데이터를 읽고 사업 기회와 위기를 짚어주는 역할입니다.
 
@@ -126,8 +148,57 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   },
 ]
 
+const COUPANG_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_coupang_stats',
+      description: '쿠팡 전체 현황. 수집 상품 수, 총 리뷰 수, 평균 평점, 마지막 수집 시각. "전체 요약", "현황", "총 리뷰" 질문에 사용.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_coupang_product_stats',
+      description: '셀퓨전씨 쿠팡 전 상품의 리뷰 수, 평균 평점. 어떤 상품이 잘 팔리는지, 평점이 높은지 확인. "상품별", "어떤 상품", "리뷰 많은" 질문에 사용.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_coupang_rankings',
+      description: '쿠팡 검색순위와 카테고리 베스트셀러 순위. "검색순위", "카테고리 순위", "몇 위" 질문에 사용.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_coupang_reviews',
+      description: '쿠팡 실구매 리뷰 내용. 소비자 반응, 불만, 칭찬 키워드 파악. 특정 상품 지정 가능. "리뷰 어때", "소비자 반응", "불만" 질문에 사용.',
+      parameters: {
+        type: 'object',
+        properties: {
+          product_id: { type: 'string', description: '특정 상품 ID (get_coupang_product_stats에서 확인). 전체 브랜드면 빈 문자열.' },
+        },
+        required: [],
+      },
+    },
+  },
+]
+
 async function executeTool(name: string, input: Record<string, unknown>): Promise<unknown> {
   switch (name) {
+    case 'get_coupang_stats':
+      return await getCoupangStats()
+    case 'get_coupang_product_stats':
+      return await getCoupangProductStats()
+    case 'get_coupang_rankings':
+      return await getCoupangRankings()
+    case 'get_coupang_reviews':
+      return await getCoupangRecentReviews((input.product_id as string) || undefined)
     case 'get_stats':
       return await getStats()
     case 'get_market_rankings': {
@@ -153,18 +224,23 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json() as {
+    const { messages, platform } = await req.json() as {
       messages: { role: 'user' | 'assistant'; content: string }[]
+      platform?: string
     }
 
     if (!messages?.length) {
       return NextResponse.json({ error: 'messages required' }, { status: 400 })
     }
 
+    const isCoupang = platform === 'coupang'
+    const activeSystem = isCoupang ? SYSTEM_COUPANG : SYSTEM
+    const activeTools = isCoupang ? COUPANG_TOOLS : TOOLS
+
     const trimmed = messages.slice(-10)
 
     const working: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      { role: 'system', content: SYSTEM },
+      { role: 'system', content: activeSystem },
       ...trimmed,
     ]
 
@@ -174,7 +250,7 @@ export async function POST(req: Request) {
       model: 'gpt-4o-mini',
       max_tokens: 1500,
       messages: working,
-      tools: TOOLS,
+      tools: activeTools,
     })
 
     // Tool-use 루프 (최대 3 라운드)
@@ -201,7 +277,7 @@ export async function POST(req: Request) {
         model: 'gpt-4o-mini',
         max_tokens: 1500,
         messages: working,
-        tools: TOOLS,
+        tools: activeTools,
       })
     }
 

@@ -1,26 +1,44 @@
 'use client'
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
 }
 
-const EXAMPLES = [
+const EXAMPLES_OLIVEYOUNG = [
   '지금 어떤 카테고리가 가장 먹거리야?',
   '부정 리뷰 급증한 상품 있어? 원인은?',
   '선케어 시장에서 우리 포지션 어때?',
   '신제품 중 가능성 있는 거 있어?',
 ]
 
+const EXAMPLES_COUPANG = [
+  '쿠팡 리뷰 평점 어때?',
+  '리뷰 많은 상품 top5 알려줘',
+  '소비자 불만이 많은 상품 있어?',
+  '검색순위 현황 알려줘',
+]
+
 export default function ChatWidget() {
+  const searchParams = useSearchParams()
+  const platform = searchParams.get('platform') ?? 'oliveyoung'
+  const isCoupang = platform === 'coupang'
+
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // 플랫폼 전환 시 대화 초기화
+  useEffect(() => {
+    setMessages([])
+    setInput('')
+  }, [platform])
 
   useEffect(() => {
     if (open) {
@@ -42,7 +60,7 @@ export default function ChatWidget() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next.slice(-10) }),
+        body: JSON.stringify({ messages: next.slice(-10), platform }),
       })
       const data = await res.json()
       setMessages(prev => [...prev, {
@@ -100,11 +118,13 @@ export default function ChatWidget() {
             {messages.length === 0 ? (
               <div className="space-y-4">
                 <p className="text-xs text-text-tertiary leading-relaxed">
-                  수집된 리뷰·랭킹·프로모션 데이터를 기반으로 답변합니다.
+                  {isCoupang
+                    ? '쿠팡 리뷰·검색순위·카테고리 데이터를 기반으로 답변합니다.'
+                    : '수집된 리뷰·랭킹·프로모션 데이터를 기반으로 답변합니다.'}
                 </p>
                 <div className="space-y-2">
                   <p className="text-xs text-text-tertiary font-medium">예시 질문</p>
-                  {EXAMPLES.map(ex => (
+                  {(isCoupang ? EXAMPLES_COUPANG : EXAMPLES_OLIVEYOUNG).map(ex => (
                     <button
                       key={ex}
                       onClick={() => send(ex)}

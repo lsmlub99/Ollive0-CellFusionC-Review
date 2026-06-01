@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { Suspense } from 'react'
 import './globals.css'
 import ChatWidget from '@/components/ChatWidget'
 
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="relative">
           {children}
         </div>
-        <ChatWidget />
+        <Suspense>
+          <ChatWidget />
+        </Suspense>
       </body>
     </html>
   )
