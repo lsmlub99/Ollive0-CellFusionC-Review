@@ -47,7 +47,7 @@ _SUFFIX_FILTER_SQL = """
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor,
-                            options="-c statement_timeout=0")
+                            options="-c statement_timeout=0 -c search_path=oliveyoung")
 
 
 def init_db(conn=None):

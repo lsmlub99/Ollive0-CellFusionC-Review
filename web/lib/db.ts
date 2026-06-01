@@ -5,6 +5,7 @@ export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 2,
   idleTimeoutMillis: 10000,
+  options: '-c search_path=oliveyoung',
 })
 
 async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
