@@ -72,19 +72,19 @@ export default function CoupangDashboard() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/coupang/stats').then(r => r.json()),
-      fetch('/api/coupang/rankings').then(r => r.json()),
+      fetch('/api/coupang/stats').then(r => r.ok ? r.json() : null),
+      fetch('/api/coupang/rankings').then(r => r.ok ? r.json() : null),
     ]).then(([s, r]) => {
       setStats(s)
-      setRankings(r)
+      setRankings(r ?? { search: [], category: [] })
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
 
   useEffect(() => {
     fetch(`/api/coupang/reviews?page=${reviewPage}`)
-      .then(r => r.json())
-      .then(d => { setReviews(d.reviews); setReviewTotal(d.total) })
+      .then(r => r.ok ? r.json() : { reviews: [], total: 0 })
+      .then(d => { setReviews(d.reviews ?? []); setReviewTotal(d.total ?? 0) })
       .catch(() => {})
   }, [reviewPage])
 
