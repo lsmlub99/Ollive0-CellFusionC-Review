@@ -13,18 +13,18 @@ interface CoupangStats {
 interface CoupangReview {
   review_id: number
   product_id: string
-  product_name: string
-  content: string
-  rating: number
+  product_name: string | null
+  content: string | null
+  rating: number | null
   helpful_count: number
-  purchased_option: string
+  purchased_option: string | null
   created_at: string
 }
 
 interface SearchRanking {
   keyword: string
   product_id: string
-  product_name: string
+  product_name: string | null
   rank_position: number
   is_ad: boolean
   rank_date: string
@@ -49,17 +49,20 @@ type TabId = typeof TABS[number]['id']
 
 const STAR_COLORS = ['', '#ef4444', '#f97316', '#eab308', '#3b82f6', '#22c55e']
 
-function StarRating({ rating }: { rating: number }) {
+function StarRating({ rating }: { rating: number | null }) {
+  const r = rating ?? 0
   return (
     <span className="flex items-center gap-0.5">
       {[1,2,3,4,5].map(i => (
-        <svg key={i} className="w-3 h-3" viewBox="0 0 20 20" fill={i <= rating ? STAR_COLORS[rating] : '#d1d5db'}>
+        <svg key={i} className="w-3 h-3" viewBox="0 0 20 20" fill={i <= r ? (STAR_COLORS[r] ?? '#d1d5db') : '#d1d5db'}>
           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
         </svg>
       ))}
     </span>
   )
 }
+
+const isBrand = (name: string | null) => (name ?? '').includes('셀퓨전씨')
 
 export default function CoupangDashboard() {
   const [active, setActive] = useState<TabId>('today')
@@ -76,7 +79,10 @@ export default function CoupangDashboard() {
       fetch('/api/coupang/rankings').then(r => r.ok ? r.json() : null),
     ]).then(([s, r]) => {
       setStats(s)
-      setRankings(r ?? { search: [], category: [] })
+      setRankings({
+        search: Array.isArray(r?.search) ? r.search : [],
+        category: Array.isArray(r?.category) ? r.category : [],
+      })
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -84,7 +90,7 @@ export default function CoupangDashboard() {
   useEffect(() => {
     fetch(`/api/coupang/reviews?page=${reviewPage}`)
       .then(r => r.ok ? r.json() : { reviews: [], total: 0 })
-      .then(d => { setReviews(d.reviews ?? []); setReviewTotal(d.total ?? 0) })
+      .then(d => { setReviews(Array.isArray(d?.reviews) ? d.reviews : []); setReviewTotal(d?.total ?? 0) })
       .catch(() => {})
   }, [reviewPage])
 
@@ -97,23 +103,26 @@ export default function CoupangDashboard() {
     )
   }
 
+  const catList = rankings?.category ?? []
+  const searchList = rankings?.search ?? []
+
   // 카테고리별 그룹핑
-  const catGroups = rankings?.category.reduce<Record<string, CategoryRanking[]>>((acc, r) => {
-    acc[r.category_name] = acc[r.category_name] ?? []
-    acc[r.category_name].push(r)
+  const catGroups = catList.reduce<Record<string, CategoryRanking[]>>((acc, r) => {
+    const key = r.category_name ?? '기타'
+    acc[key] = acc[key] ?? []
+    acc[key].push(r)
     return acc
-  }, {}) ?? {}
+  }, {})
 
   // 검색순위: 키워드별 그룹
-  const searchGroups = rankings?.search.reduce<Record<string, SearchRanking[]>>((acc, r) => {
-    acc[r.keyword] = acc[r.keyword] ?? []
-    acc[r.keyword].push(r)
+  const searchGroups = searchList.reduce<Record<string, SearchRanking[]>>((acc, r) => {
+    const key = r.keyword ?? '기타'
+    acc[key] = acc[key] ?? []
+    acc[key].push(r)
     return acc
-  }, {}) ?? {}
+  }, {})
 
-  const brandProducts = rankings?.category.filter(r =>
-    r.product_name.includes('셀퓨전씨')
-  ) ?? []
+  const brandProducts = catList.filter(r => isBrand(r.product_name))
 
   return (
     <div className="space-y-8">
@@ -201,7 +210,7 @@ export default function CoupangDashboard() {
                             <span className={`w-5 text-right text-xs font-bold shrink-0 ${item.rank_position <= 3 ? 'text-accent' : 'text-text-tertiary'}`}>
                               {item.rank_position}
                             </span>
-                            <span className={`truncate ${item.product_name.includes('셀퓨전씨') ? 'text-accent font-semibold' : 'text-text-primary'}`}>
+                            <span className={`truncate ${isBrand(item.product_name) ? 'text-accent font-semibold' : 'text-text-primary'}`}>
                               {item.product_name}
                             </span>
                           </li>
@@ -277,8 +286,8 @@ export default function CoupangDashboard() {
                         <span className={`text-sm font-bold w-8 text-right shrink-0 ${item.rank_position <= 3 ? 'text-accent' : 'text-text-tertiary'}`}>
                           {item.rank_position === 0 ? '광고' : `${item.rank_position}위`}
                         </span>
-                        <span className={`text-sm truncate flex-1 ${item.product_name.includes('셀퓨전씨') ? 'text-accent font-semibold' : 'text-text-primary'}`}>
-                          {item.product_name}
+                        <span className={`text-sm truncate flex-1 ${isBrand(item.product_name) ? 'text-accent font-semibold' : 'text-text-primary'}`}>
+                          {item.product_name ?? '-'}
                         </span>
                         {item.is_ad && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 shrink-0">광고</span>
@@ -307,14 +316,14 @@ export default function CoupangDashboard() {
                     {items.slice(0, 30).map(item => (
                       <li key={item.rank_position}
                           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${
-                            item.product_name.includes('셀퓨전씨')
+                            isBrand(item.product_name)
                               ? 'border-accent/30 bg-accent-bg'
                               : 'border-border bg-surface'
                           }`}>
                         <span className={`text-sm font-bold w-7 text-right shrink-0 ${item.rank_position <= 3 ? 'text-accent' : 'text-text-tertiary'}`}>
                           {item.rank_position}
                         </span>
-                        <span className={`text-sm truncate ${item.product_name.includes('셀퓨전씨') ? 'text-accent font-semibold' : 'text-text-primary'}`}>
+                        <span className={`text-sm truncate ${isBrand(item.product_name) ? 'text-accent font-semibold' : 'text-text-primary'}`}>
                           {item.product_name}
                         </span>
                       </li>
