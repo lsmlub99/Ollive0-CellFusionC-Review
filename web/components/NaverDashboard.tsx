@@ -15,6 +15,13 @@ interface SearchRankItem {
   mall_name: string; price: number; link: string; is_ours: boolean
   rank_date: string; prev_rank: number | null; delta: number | null
 }
+interface BrandChannel { mall_name: string; rank_position: number; price: number; link: string }
+interface BrandChannelGroup {
+  keyword: string; channel_count: number
+  price_min: number | null; price_max: number | null; price_median: number | null
+  channels: BrandChannel[]; rank_date: string
+}
+interface SearchRanksData { category: SearchRankItem[]; brand: BrandChannelGroup[] }
 interface MarketItem {
   category: string; brand: string | null; product_title: string
   mall_name: string; price: number; is_ours: boolean
@@ -67,11 +74,16 @@ function DeltaBadge({ delta, prevRank }: { delta: number | null; prevRank: numbe
     <span className="text-[10px] font-bold text-blue-600 w-8 text-right shrink-0">NEW</span>
   )
   if (delta === null || delta === 0) return (
-    <span className="text-[11px] text-text-tertiary w-8 text-right shrink-0">-</span>
+    <span className="text-[11px] text-text-tertiary w-8 text-right shrink-0">—</span>
   )
   return delta > 0
     ? <span className="text-[11px] font-semibold text-emerald-600 w-8 text-right shrink-0">▲{delta}</span>
     : <span className="text-[11px] font-semibold text-red-500 w-8 text-right shrink-0">▼{Math.abs(delta)}</span>
+}
+
+function RankMedal({ pos }: { pos: number }) {
+  const cls = pos === 1 ? 'text-yellow-500' : pos === 2 ? 'text-gray-400' : pos === 3 ? 'text-orange-400' : 'text-text-tertiary'
+  return <span className={`w-6 text-center text-xs font-bold shrink-0 ${cls}`}>{pos}</span>
 }
 
 // ─── 트렌드 탭 ────────────────────────────────────────────────────────────────
@@ -85,7 +97,6 @@ function TrendsTab({ data }: { data: Record<string, TrendPoint[]> }) {
     </div>
   )
 
-  // 날짜 기준 병합
   const allDates = [...new Set(keywords.flatMap(k => data[k].map(p => p.date)))].sort()
   const chartData = allDates.map(date => {
     const point: Record<string, any> = { date: date.slice(5) }
@@ -96,6 +107,13 @@ function TrendsTab({ data }: { data: Record<string, TrendPoint[]> }) {
     return point
   })
 
+  // 최신 주차 값 요약
+  const lastDate = allDates[allDates.length - 1]
+  const latestValues = keywords.map(kw => {
+    const pt = data[kw].find(p => p.date === lastDate)
+    return { kw, ratio: pt?.ratio ?? null }
+  }).filter(v => v.ratio !== null).sort((a, b) => (b.ratio ?? 0) - (a.ratio ?? 0))
+
   return (
     <div className="space-y-4">
       <div>
@@ -105,6 +123,21 @@ function TrendsTab({ data }: { data: Record<string, TrendPoint[]> }) {
           <span className="text-sm text-text-tertiary">최근 8주 · 0~100 상대지수</span>
         </div>
       </div>
+
+      {/* 최신 수치 요약 칩 */}
+      {latestValues.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {latestValues.map(({ kw, ratio }, i) => (
+            <div key={kw} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border bg-surface text-xs">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[keywords.indexOf(kw) % COLORS.length] }} />
+              <span className="text-text-secondary">{kw}</span>
+              <span className="font-semibold text-text-primary">{ratio}</span>
+            </div>
+          ))}
+          <span className="text-[11px] text-text-tertiary self-center">{lastDate?.slice(5)} 기준</span>
+        </div>
+      )}
+
       <div className="border border-border rounded-lg bg-surface p-4">
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
@@ -136,75 +169,144 @@ function TrendsTab({ data }: { data: Record<string, TrendPoint[]> }) {
 
 // ─── 검색 노출 탭 ─────────────────────────────────────────────────────────────
 
-function SearchRanksTab({ items }: { items: SearchRankItem[] }) {
-  const byKeyword: Record<string, SearchRankItem[]> = {}
-  for (const item of items) {
-    if (!byKeyword[item.keyword]) byKeyword[item.keyword] = []
-    byKeyword[item.keyword].push(item)
-  }
+function SearchRanksTab({ data }: { data: SearchRanksData }) {
+  const { category, brand } = data
+  const catKeywords = [...new Set(category.map(i => i.keyword))]
+  const [activeCat, setActiveCat] = useState('')
+  const [expandedBrand, setExpandedBrand] = useState<string | null>(null)
 
-  if (Object.keys(byKeyword).length === 0) return (
+  const activeCatKey = activeCat || catKeywords[0] || ''
+  const catItems = category.filter(i => i.keyword === activeCatKey)
+
+  if (category.length === 0 && brand.length === 0) return (
     <div className="border border-dashed border-border rounded-lg px-6 py-12 text-center">
       <p className="text-sm text-text-secondary">검색 노출 데이터가 없어요</p>
       <p className="text-xs text-text-tertiary mt-1">수집 후 표시됩니다</p>
     </div>
   )
 
-  const ownItems = items.filter(i => i.is_ours)
-
   return (
-    <div className="space-y-6">
-      {/* 자사 요약 */}
-      {ownItems.length > 0 && (
+    <div className="space-y-8">
+
+      {/* ── 섹션 1: 카테고리 경쟁 순위 ── */}
+      <div className="space-y-3">
+        <SectionDivider tag="카테고리 경쟁 순위" />
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-text-primary">카테고리 검색 경쟁 순위</h2>
+          <span className="text-xs text-text-tertiary">일반 검색어 기준 · 자사 위치 강조</span>
+        </div>
+
+        {catKeywords.length === 0 ? (
+          <div className="border border-dashed border-border rounded-lg px-5 py-6 bg-surface/50">
+            <p className="text-sm text-text-secondary text-center">다음 수집부터 카테고리 경쟁 순위가 표시됩니다</p>
+            <p className="text-xs text-text-tertiary text-center mt-1">"선크림", "선세럼" 등 일반 검색어 결과에서 자사 노출 위치를 추적합니다</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* 키워드 탭 */}
+            <div className="flex gap-1.5 flex-wrap">
+              {catKeywords.map(kw => (
+                <button
+                  key={kw}
+                  onClick={() => setActiveCat(kw)}
+                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                    (activeCat || catKeywords[0]) === kw
+                      ? 'bg-accent text-white border-accent'
+                      : 'border-border text-text-secondary hover:text-text-primary hover:border-accent/40'
+                  }`}
+                >
+                  {kw}
+                </button>
+              ))}
+            </div>
+
+            {/* 순위 목록 */}
+            <div className="border border-border rounded-lg bg-surface overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between">
+                <p className="text-sm font-semibold text-text-primary">"{activeCatKey}" 검색 결과</p>
+                <p className="text-xs text-text-tertiary">{catItems[0]?.rank_date} 기준 · Top {catItems.length}</p>
+              </div>
+              <div className="divide-y divide-border">
+                {catItems.slice(0, 30).map(item => (
+                  <div
+                    key={item.rank_position}
+                    className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${
+                      item.is_ours ? 'bg-accent-bg/30' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <RankMedal pos={item.rank_position} />
+                    <span className={`flex-1 text-xs leading-relaxed ${
+                      item.is_ours ? 'font-semibold text-accent' : 'text-text-primary'
+                    }`}>
+                      {item.is_ours && <span className="mr-1 text-accent">★</span>}
+                      {item.product_title}
+                    </span>
+                    <span className="text-[11px] text-text-tertiary shrink-0 w-20 text-right truncate">{item.mall_name}</span>
+                    <span className="text-[11px] text-text-secondary shrink-0 w-16 text-right">
+                      {item.price > 0 ? `${item.price.toLocaleString()}원` : '—'}
+                    </span>
+                    <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── 섹션 2: 자사 채널 분포 ── */}
+      {brand.length > 0 && (
         <div className="space-y-3">
-          <SectionDivider tag="자사 노출 요약" />
-          <div className="flex flex-wrap gap-2">
-            {ownItems.map(item => (
-              <div key={`${item.keyword}-${item.rank_position}`}
-                   className="flex items-center gap-2 px-3 py-2 rounded-lg border border-accent/30 bg-accent-bg/30">
-                <span className="text-xs text-text-secondary truncate max-w-[120px]">{item.keyword}</span>
-                <span className="text-sm font-bold text-accent">{item.rank_position}위</span>
-                <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
+          <SectionDivider tag="자사 채널 분포" />
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-text-primary">자사 채널 분포</h2>
+            <span className="text-xs text-text-tertiary">제품명 검색 기준 · 입점 채널 현황</span>
+          </div>
+          <div className="space-y-2">
+            {brand.map(group => (
+              <div key={group.keyword} className="border border-border rounded-lg bg-surface overflow-hidden">
+                <button
+                  onClick={() => setExpandedBrand(v => v === group.keyword ? null : group.keyword)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 text-left transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-text-primary truncate">{group.keyword}</p>
+                    <div className="flex items-center gap-3 mt-0.5 text-[11px] text-text-tertiary">
+                      <span>{group.channel_count}개 채널</span>
+                      {group.price_min != null && <span>최저 {group.price_min.toLocaleString()}원</span>}
+                      {group.price_max != null && <span>최고 {group.price_max.toLocaleString()}원</span>}
+                      {group.price_median != null && <span>중간가 {group.price_median.toLocaleString()}원</span>}
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-text-tertiary shrink-0">
+                    {expandedBrand === group.keyword ? '▲ 접기' : '▼ 펼치기'}
+                  </span>
+                </button>
+                {expandedBrand === group.keyword && (
+                  <div className="border-t border-border">
+                    <div className="divide-y divide-border">
+                      {group.channels.slice(0, 15).map((ch, i) => (
+                        <div key={i} className="flex items-center gap-3 px-4 py-2">
+                          <span className="w-6 text-xs font-bold text-text-tertiary text-center shrink-0">{ch.rank_position}</span>
+                          <span className="flex-1 text-xs text-text-primary truncate">{ch.mall_name}</span>
+                          <span className="text-xs font-medium text-text-secondary shrink-0">
+                            {ch.price > 0 ? `${ch.price.toLocaleString()}원` : '—'}
+                          </span>
+                        </div>
+                      ))}
+                      {group.channels.length > 15 && (
+                        <div className="px-4 py-2 text-center">
+                          <span className="text-[11px] text-text-tertiary">외 {group.channels.length - 15}개 채널</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
-
-      {/* 키워드별 전체 목록 */}
-      <div className="space-y-4">
-        <SectionDivider tag="키워드별 순위" />
-        {Object.entries(byKeyword).map(([keyword, kItems]) => (
-          <div key={keyword} className="border border-border rounded-lg bg-surface overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between">
-              <p className="text-sm font-semibold text-text-primary">{keyword}</p>
-              <p className="text-xs text-text-tertiary">{kItems[0]?.rank_date} 기준 Top {kItems.length}</p>
-            </div>
-            <div className="divide-y divide-border">
-              {kItems.slice(0, 20).map(item => (
-                <div key={item.rank_position}
-                     className={`flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors ${
-                       item.is_ours ? 'bg-accent-bg/20' : ''
-                     }`}>
-                  <span className={`w-6 text-center text-xs font-bold shrink-0 ${
-                    item.rank_position === 1 ? 'text-yellow-500' :
-                    item.rank_position === 2 ? 'text-gray-400' :
-                    item.rank_position === 3 ? 'text-orange-400' : 'text-text-tertiary'
-                  }`}>{item.rank_position}</span>
-                  <span className={`flex-1 text-xs truncate ${item.is_ours ? 'font-semibold text-accent' : 'text-text-primary'}`}>
-                    {item.product_title}
-                  </span>
-                  <span className="text-[11px] text-text-tertiary shrink-0 w-20 text-right truncate">{item.mall_name}</span>
-                  <span className="text-[11px] text-text-secondary shrink-0 w-16 text-right">
-                    {item.price > 0 ? `${item.price.toLocaleString()}원` : '-'}
-                  </span>
-                  <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
@@ -212,6 +314,8 @@ function SearchRanksTab({ items }: { items: SearchRankItem[] }) {
 // ─── 시장 현황 탭 ─────────────────────────────────────────────────────────────
 
 function MarketTab({ items }: { items: MarketItem[] }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
   const byCategory: Record<string, MarketItem[]> = {}
   for (const item of items) {
     if (!byCategory[item.category]) byCategory[item.category] = []
@@ -236,37 +340,60 @@ function MarketTab({ items }: { items: MarketItem[] }) {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {Object.entries(byCategory).map(([cat, catItems]) => {
-          const singles   = catItems.filter(i => !i.is_ours && i.price > 0)
-          const ours      = catItems.filter(i => i.is_ours)
-          const prices    = singles.map(i => i.price).sort((a, b) => a - b)
-          const minPrice  = prices[0]
-          const medPrice  = prices[Math.floor(prices.length / 2)]
-          const top10     = catItems.slice(0, 10)
+          const compItems  = catItems.filter(i => !i.is_ours && i.price > 0).sort((a, b) => a.price - b.price)
+          const ours       = catItems.filter(i => i.is_ours && i.price > 0)
+          const prices     = compItems.map(i => i.price)
+          const minPrice   = prices[0]
+          const medPrice   = prices[Math.floor(prices.length / 2)]
+          const avgOurPrice = ours.length > 0 ? Math.round(ours.reduce((s, i) => s + i.price, 0) / ours.length) : null
+
+          // 우리 제품 가격이 경쟁사 중 어느 퍼센타일?
+          const ourPercentile = avgOurPrice && prices.length > 0
+            ? Math.round((prices.filter(p => p <= avgOurPrice).length / prices.length) * 100)
+            : null
+
+          // 표시 목록: 경쟁사 정렬 목록에 자사 삽입
+          const allSorted = [...catItems.filter(i => i.price > 0)].sort((a, b) => a.price - b.price)
+          const showCount  = expanded[cat] ? allSorted.length : 10
 
           return (
             <div key={cat} className="border border-border rounded-lg bg-surface overflow-hidden">
+              {/* 카드 헤더 */}
               <div className="px-4 py-3 border-b border-border bg-muted/40">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-1">
                   <p className="text-sm font-semibold text-text-primary">{cat}</p>
-                  <div className="flex items-center gap-3 text-[11px] text-text-tertiary">
-                    <span>최저 {minPrice?.toLocaleString()}원</span>
-                    <span>중간 {medPrice?.toLocaleString()}원</span>
-                    <span>총 {singles.length}개</span>
+                  <div className="flex items-center gap-2 text-[11px] text-text-tertiary">
+                    {minPrice && <span>최저 {minPrice.toLocaleString()}원</span>}
+                    {medPrice && <span>중간 {medPrice.toLocaleString()}원</span>}
+                    <span>총 {compItems.length}개</span>
                   </div>
                 </div>
-                {ours.length > 0 && (
-                  <p className="mt-1 text-xs text-accent font-medium">
-                    자사 {ours.length}개 · 평균 {Math.round(ours.reduce((s, i) => s + i.price, 0) / ours.length).toLocaleString()}원
-                  </p>
+                {avgOurPrice != null && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-accent font-semibold">★ 자사</span>
+                    <span className="text-xs text-accent">{avgOurPrice.toLocaleString()}원</span>
+                    {ourPercentile != null && (
+                      <span className="text-[11px] text-text-tertiary">
+                        (경쟁사 대비 상위 {100 - ourPercentile}%)
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
+
+              {/* 상품 목록 */}
               <div className="divide-y divide-border">
-                {top10.map((item, idx) => (
-                  <div key={idx}
-                       className={`flex items-center gap-3 px-4 py-2 text-xs hover:bg-gray-50 ${
-                         item.is_ours ? 'bg-accent-bg/20' : ''
-                       }`}>
-                    <span className={`flex-1 truncate ${item.is_ours ? 'font-semibold text-accent' : 'text-text-primary'}`}>
+                {allSorted.slice(0, showCount).map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center gap-3 px-4 py-2 text-xs transition-colors ${
+                      item.is_ours ? 'bg-accent-bg/20' : 'hover:bg-gray-50/50'
+                    }`}
+                  >
+                    <span className={`flex-1 truncate leading-relaxed ${
+                      item.is_ours ? 'font-semibold text-accent' : 'text-text-primary'
+                    }`}>
+                      {item.is_ours && <span className="mr-1">★</span>}
                       {item.product_title}
                     </span>
                     {item.volume_ml && (
@@ -278,6 +405,16 @@ function MarketTab({ items }: { items: MarketItem[] }) {
                   </div>
                 ))}
               </div>
+
+              {/* 더보기 */}
+              {allSorted.length > 10 && (
+                <button
+                  onClick={() => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }))}
+                  className="w-full py-2 text-[11px] text-text-tertiary hover:text-text-secondary border-t border-border hover:bg-gray-50/50 transition-colors"
+                >
+                  {expanded[cat] ? '▲ 접기' : `▼ 더보기 (${allSorted.length - 10}개 더)`}
+                </button>
+              )}
             </div>
           )
         })}
@@ -389,12 +526,12 @@ function InsightTab() {
 export default function NaverDashboard() {
   const [active, setActive] = useState<TabId>('trends')
 
-  const [trends,      setTrends]      = useState<Record<string, TrendPoint[]> | null>(null)
-  const [ranks,       setRanks]       = useState<SearchRankItem[] | null>(null)
-  const [market,      setMarket]      = useState<MarketItem[] | null>(null)
-  const [trendsLoad,  setTrendsLoad]  = useState(false)
-  const [ranksLoad,   setRanksLoad]   = useState(false)
-  const [marketLoad,  setMarketLoad]  = useState(false)
+  const [trends,     setTrends]     = useState<Record<string, TrendPoint[]> | null>(null)
+  const [ranks,      setRanks]      = useState<SearchRanksData | null>(null)
+  const [market,     setMarket]     = useState<MarketItem[] | null>(null)
+  const [trendsLoad, setTrendsLoad] = useState(false)
+  const [ranksLoad,  setRanksLoad]  = useState(false)
+  const [marketLoad, setMarketLoad] = useState(false)
 
   useEffect(() => {
     if (active === 'trends' && trends === null && !trendsLoad) {
@@ -403,7 +540,11 @@ export default function NaverDashboard() {
     }
     if (active === 'ranks' && ranks === null && !ranksLoad) {
       setRanksLoad(true)
-      fetch('/api/naver/search-ranks').then(r => r.json()).then(setRanks).catch(() => setRanks([])).finally(() => setRanksLoad(false))
+      fetch('/api/naver/search-ranks')
+        .then(r => r.json())
+        .then(data => setRanks(data && typeof data === 'object' ? data : { category: [], brand: [] }))
+        .catch(() => setRanks({ category: [], brand: [] }))
+        .finally(() => setRanksLoad(false))
     }
     if (active === 'market' && market === null && !marketLoad) {
       setMarketLoad(true)
@@ -444,7 +585,7 @@ export default function NaverDashboard() {
         trendsLoad ? <Spinner /> : <TrendsTab data={trends ?? {}} />
       )}
       {active === 'ranks' && (
-        ranksLoad ? <Spinner /> : <SearchRanksTab items={ranks ?? []} />
+        ranksLoad ? <Spinner /> : <SearchRanksTab data={ranks ?? { category: [], brand: [] }} />
       )}
       {active === 'market' && (
         marketLoad ? <Spinner /> : <MarketTab items={market ?? []} />

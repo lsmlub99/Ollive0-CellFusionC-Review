@@ -17,6 +17,26 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from db.coupang_schema import get_conn, init_db
 
 BRAND_QUERY = os.getenv('COUPANG_BRAND', '셀퓨전씨')
+OUR_IDENTIFIERS = [BRAND_QUERY, "cellfusionc", "cell fusion c"]
+
+# 수집 시작 시 DB에서 로드한 자사 product_id 집합 (정확도 우선 체크)
+_our_product_ids: set = set()
+
+
+def _is_ours(product_id: str, product_name: str) -> bool:
+    if product_id and product_id in _our_product_ids:
+        return True
+    name_l = product_name.lower()
+    return any(kw.lower() in name_l for kw in OUR_IDENTIFIERS)
+
+
+def _load_our_product_ids(conn) -> set:
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT product_id FROM products WHERE is_ours = TRUE")
+            return {r['product_id'] for r in cur.fetchall()}
+    except Exception:
+        return set()
 
 SEARCH_KEYWORDS = [
     '셀퓨전씨',
@@ -148,7 +168,7 @@ def fetch_search_ranking(driver: uc.Chrome, keyword: str) -> list[dict]:
                     'product_name': product_name,
                     'rank_position': organic_rank if not is_ad else 0,
                     'is_ad': is_ad,
-                    'is_ours': BRAND_QUERY in product_name,
+                    'is_ours': _is_ours(product_id, product_name),
                 })
 
                 if organic_rank >= 100:
@@ -206,7 +226,7 @@ def fetch_category_ranking(driver: uc.Chrome, cat_name: str, cat_id: str) -> lis
                     'rank_position': len(results) + 1,
                     'product_id': product_id,
                     'product_name': product_name,
-                    'is_ours': BRAND_QUERY in product_name,
+                    'is_ours': _is_ours(product_id, product_name),
                 })
 
             if len(results) >= 100 or len(items) < 10:
@@ -239,6 +259,7 @@ def _is_cat_unchanged(cur, cat_name: str, ranking: list[dict]) -> bool:
 
 
 def run():
+    global _our_product_ids
     rank_hour = datetime.now(timezone.utc).hour
     today = date.today()
     print(f"=== 쿠팡 순위 수집 ({today} UTC {rank_hour:02d}시) ===\n")
@@ -249,6 +270,8 @@ def run():
 
     try:
         init_db(conn=conn)
+        _our_product_ids = _load_our_product_ids(conn)
+        print(f"  자사 등록 상품 {len(_our_product_ids)}개 로드")
         driver = _init_driver()
 
         # ── 검색 순위 ──────────────────────────────

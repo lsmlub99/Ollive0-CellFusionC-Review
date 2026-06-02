@@ -20,7 +20,7 @@ _HEADERS = {
     "X-Naver-Client-Secret": NAVER_SECRET,
 }
 
-OUR_BRAND = "셀퓨전씨"
+OUR_IDENTIFIERS = ["셀퓨전씨", "cellfusionc", "cell fusion c"]
 
 TREND_KEYWORDS = ["셀퓨전씨", "선크림", "선세럼", "선스프레이", "선스틱"]
 
@@ -47,11 +47,14 @@ def _parse_ml(text: str):
     m = _ML_RE.search(text)
     return float(m.group(1)) if m else None
 
-def _is_ours(title: str, mall: str) -> bool:
-    return OUR_BRAND in title or OUR_BRAND in mall
+def _is_ours(title: str, mall: str = "") -> bool:
+    combined = (title + " " + mall).lower()
+    return any(kw.lower() in combined for kw in OUR_IDENTIFIERS)
 
 def _infer_brand(title: str):
-    for b in [OUR_BRAND] + COMPETITORS:
+    if _is_ours(title):
+        return "셀퓨전씨"
+    for b in COMPETITORS:
         if b in title:
             return b
     return None
@@ -116,7 +119,7 @@ def save_trends(conn, results: list) -> int:
     return count
 
 
-def save_search_ranks(conn, keyword: str, items: list):
+def save_search_ranks(conn, keyword: str, items: list, query_type: str = 'brand'):
     today = datetime.today().strftime("%Y-%m-%d")
     with conn.cursor() as cur:
         cur.execute("DELETE FROM search_ranks WHERE rank_date = %s AND keyword = %s", (today, keyword))
@@ -125,13 +128,14 @@ def save_search_ranks(conn, keyword: str, items: list):
             mall  = item.get("mallName", "")
             cur.execute(
                 """INSERT INTO search_ranks
-                       (rank_date, keyword, rank_position, product_title, mall_name, price, link, is_ours)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                       (rank_date, keyword, rank_position, product_title, mall_name, price, link, is_ours, query_type)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (rank_date, keyword, rank_position) DO NOTHING""",
                 (today, keyword, i, title, mall,
                  int(item.get("lprice", 0) or 0),
                  item.get("link", ""),
-                 _is_ours(title, mall)),
+                 _is_ours(title, mall),
+                 query_type),
             )
 
 
@@ -279,21 +283,32 @@ def run():
             print("  데이터 없음")
         time.sleep(1)
 
-        # 2. 자사 검색 순위
+        # 2. 자사 검색 순위 (브랜드 채널 분포)
         print("[2/4] 자사 제품 검색 노출 순위...")
         for query in OWN_QUERIES:
             items = search_shopping(query, display=40)
             if items:
-                save_search_ranks(conn, query, items)
+                save_search_ranks(conn, query, items, query_type='brand')
                 ours = [i+1 for i, it in enumerate(items)
                         if _is_ours(_clean(it.get("title","")), it.get("mallName",""))]
                 print(f"  '{query}': 자사 {len(ours)}개 노출, 위치={ours[:3]}")
             time.sleep(0.5)
 
-        # 3. 경쟁사 시장
+        # 3. 경쟁사 시장 + 카테고리 경쟁 순위
         print("[3/4] 경쟁사 시장 수집...")
         for cat in CATEGORIES:
-            all_items = search_shopping(cat, display=40)
+            # 카테고리 일반 검색 — search_ranks에도 저장 (경쟁 순위 파악용)
+            cat_items = search_shopping(cat, display=40)
+            if cat_items:
+                save_search_ranks(conn, cat, cat_items, query_type='category')
+                ours_pos = [i+1 for i, it in enumerate(cat_items)
+                            if _is_ours(_clean(it.get("title","")), it.get("mallName",""))]
+                if ours_pos:
+                    print(f"  [경쟁순위] '{cat}': 자사 {ours_pos[:3]}위")
+            time.sleep(0.3)
+
+            # 시장 현황용 수집 (경쟁사 포함 전체)
+            all_items = list(cat_items)
             for brand in COMPETITORS[:5]:
                 all_items += search_shopping(f"{brand} {cat}", display=20)
                 time.sleep(0.3)
@@ -304,7 +319,7 @@ def run():
                     seen.add(key)
                     deduped.append(it)
             save_market_items(conn, cat, deduped)
-            print(f"  {cat}: {len(deduped)}개")
+            print(f"  {cat}: 시장 {len(deduped)}개")
             time.sleep(0.5)
 
         # 4. AI 인사이트

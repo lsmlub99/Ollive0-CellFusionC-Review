@@ -39,11 +39,15 @@ def init_db(conn=None):
                     mall_name     TEXT,
                     price         INT,
                     link          TEXT,
-                    is_ours       BOOLEAN DEFAULT FALSE
+                    is_ours       BOOLEAN DEFAULT FALSE,
+                    query_type    TEXT DEFAULT 'brand'
                 )
             """)
             cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_nv_rank_uniq ON search_ranks(rank_date, keyword, rank_position)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_nv_rank_date ON search_ranks(rank_date DESC)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_nv_rank_type  ON search_ranks(query_type)")
+            # 기존 테이블에 컬럼 추가 (이미 있으면 무시)
+            cur.execute("ALTER TABLE search_ranks ADD COLUMN IF NOT EXISTS query_type TEXT DEFAULT 'brand'")
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS market_items (
