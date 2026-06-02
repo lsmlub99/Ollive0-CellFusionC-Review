@@ -26,6 +26,47 @@ def _cf_get(url, **kwargs):
         return cf_requests.get(url, impersonate=_IMPERSONATE, **kwargs)
     return requests.get(url, **kwargs)
 
+
+def cf_request_with_retries(method: str, url: str, max_retries: int = 5, backoff_base: float = 1.0, **kwargs):
+    """요청에 대한 재시도/백오프 래퍼.
+    - 429, 5xx 응답 및 일시적 네트워크 오류에 대해 재시도
+    - 지수 백오프 + 랜덤 지터 적용
+    """
+    retry_statuses = {429, 500, 502, 503, 504}
+    for attempt in range(1, max_retries + 1):
+        try:
+            if method.lower() == 'get':
+                res = _cf_get(url, **kwargs)
+            else:
+                res = _cf_post(url, **kwargs)
+        except Exception as e:
+            if attempt == max_retries:
+                raise
+            sleep = backoff_base * (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+            print(f"    네트워크 오류, 재시도 {attempt}/{max_retries} 대기 {sleep:.1f}s: {e}")
+            time.sleep(sleep)
+            continue
+
+        if res is None:
+            if attempt == max_retries:
+                return res
+            sleep = backoff_base * (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+            print(f"    응답 없음, 재시도 {attempt}/{max_retries} 대기 {sleep:.1f}s")
+            time.sleep(sleep)
+            continue
+
+        if res.status_code in retry_statuses:
+            if attempt == max_retries:
+                return res
+            sleep = backoff_base * (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+            print(f"    HTTP {res.status_code} 수신, 재시도 {attempt}/{max_retries} 대기 {sleep:.1f}s")
+            time.sleep(sleep)
+            continue
+
+        return res
+
+    return None
+
 load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -146,13 +187,18 @@ def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> li
                 payload["cursorCount"] = cursor_count
 
             try:
-                res = _cf_post(url, json=payload, headers=HEADERS_API, timeout=15)
+                res = cf_request_with_retries('post', url, json=payload, headers=HEADERS_API, timeout=15)
             except Exception as e:
                 print(f"    요청 오류: {e}")
                 break
 
+            if res is None:
+                print(f"    cursor API 응답 없음 ({sort_type}) -스킵")
+                break
+
             if res.status_code != 200:
                 print(f"    cursor API {res.status_code} ({sort_type}) -스킵")
+                # 429(과도한 요청)은 이미 재시도 로직으로 다뤄졌으므로 여기서는 건너뜀
                 break
 
             body = res.json()
@@ -185,21 +231,19 @@ def fetch_new_review_ids(goods_no: str, existing_ids: set, size: int = 50) -> li
 
 
 def fetch_review_detail(review_id: int, retries: int = 3) -> dict | None:
-    for attempt in range(retries):
-        try:
-            res = _cf_get(
-                f"https://m.oliveyoung.co.kr/review/api/v2/reviews/{review_id}",
-                headers=HEADERS_API, timeout=15
-            )
-            if res.status_code != 200:
-                return None
-            return res.json().get("data")
-        except Exception as e:
-            if attempt < retries - 1:
-                time.sleep(random.uniform(3.0, 6.0))
-            else:
-                print(f"    리뷰 {review_id} 실패 (재시도 {retries}회): {e}")
-    return None
+    try:
+        res = cf_request_with_retries('get', f"https://m.oliveyoung.co.kr/review/api/v2/reviews/{review_id}",
+                                      headers=HEADERS_API, timeout=15, max_retries=3, backoff_base=1.0)
+    except Exception as e:
+        print(f"    리뷰 {review_id} 요청 중 예외: {e}")
+        return None
+
+    if not res or res.status_code != 200:
+        return None
+    try:
+        return res.json().get("data")
+    except Exception:
+        return None
 
 
 def run():
