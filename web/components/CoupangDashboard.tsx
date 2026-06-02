@@ -542,152 +542,67 @@ function InsightSections({ text }: { text: string }) {
 }
 
 function CoupangInsightPanel({ productId }: { productId: string }) {
-  const [status, setStatus]         = useState<'idle' | 'loading' | 'done'>('idle')
-  const [text, setText]             = useState('')
-  const [showHistory, setShowHist]  = useState(false)
-  const [history, setHistory]       = useState<InsightHistoryEntry[]>([])
-  const [histLoading, setHLoading]  = useState(false)
-  const [expandedId, setExpanded]   = useState<number | null>(null)
+  const [loading, setLoading]      = useState(true)
+  const [latest, setLatest]        = useState<InsightHistoryEntry | null>(null)
+  const [history, setHistory]      = useState<InsightHistoryEntry[]>([])
+  const [expandedId, setExpanded]  = useState<number | null>(null)
 
   useEffect(() => {
-    setStatus('idle')
-    setText('')
-    setShowHist(false)
+    setLoading(true)
+    setLatest(null)
     setHistory([])
     setExpanded(null)
+    const qs = productId ? `?productId=${productId}&limit=10` : '?limit=10'
+    fetch(`/api/coupang/insights/history${qs}`)
+      .then(r => r.json())
+      .then((data: InsightHistoryEntry[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setLatest(data[0])
+          setHistory(data.slice(1))
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [productId])
 
-  async function run() {
-    setStatus('loading')
-    setText('')
-    const qs = productId ? `?productId=${productId}` : ''
-    try {
-      const res    = await fetch(`/api/coupang/insights${qs}`)
-      const reader = res.body!.getReader()
-      const dec    = new TextDecoder()
-      let   buf    = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += dec.decode(value, { stream: true })
-        setText(buf)
-      }
-      setStatus('done')
-      // refresh history after new analysis
-      if (showHistory) loadHistory()
-    } catch {
-      setStatus('idle')
-    }
-  }
-
-  async function loadHistory() {
-    setHLoading(true)
-    const qs = productId ? `?productId=${productId}` : ''
-    try {
-      const res  = await fetch(`/api/coupang/insights/history${qs}`)
-      const data = await res.json()
-      setHistory(Array.isArray(data) ? data : [])
-    } finally {
-      setHLoading(false)
-    }
-  }
-
-  function toggleHistory() {
-    if (!showHistory && history.length === 0) loadHistory()
-    setShowHist(v => !v)
-  }
-
-  const sections = parseInsightSections(text)
-
-  // ── idle ──
-  if (status === 'idle') {
+  if (loading) {
     return (
-      <div className="border border-dashed border-accent/30 rounded-lg px-5 py-6 mb-6 bg-accent-bg/30">
-        <div className="text-center">
-          <p className="text-sm font-semibold text-text-primary mb-1">AI 리뷰 분석</p>
-          <p className="text-xs text-text-secondary mb-4">
-            K-뷰티 전문가 시각으로 {productId ? '선택 상품' : '전체 브랜드'} 리뷰를 분석합니다
-          </p>
-          <button
-            onClick={run}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-accent text-white
-                       text-sm font-semibold hover:bg-accent/90 transition-colors duration-150"
-          >
-            인사이트 분석 시작
-          </button>
-        </div>
-        <div className="mt-4 pt-4 border-t border-accent/20 flex justify-center">
-          <button onClick={toggleHistory}
-                  className="text-xs text-text-tertiary hover:text-text-secondary transition-colors">
-            {showHistory ? '이력 숨기기 ▲' : '이전 분석 이력 보기 ▼'}
-          </button>
-        </div>
-        {showHistory && (
-          <HistoryList
-            entries={history}
-            loading={histLoading}
-            expandedId={expandedId}
-            onToggle={id => setExpanded(v => v === id ? null : id)}
-          />
-        )}
+      <div className="border border-border rounded-lg px-5 py-5 mb-6 flex items-center gap-2">
+        <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
+        <p className="text-sm text-text-secondary">인사이트 불러오는 중...</p>
       </div>
     )
   }
 
-  // ── loading (no sections yet) ──
-  if (status === 'loading' && sections.length === 0) {
+  if (!latest) {
     return (
-      <div className="border border-border rounded-lg px-5 py-6 mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
-          <p className="text-sm font-semibold text-text-primary">분석 중...</p>
-        </div>
-        <div className="space-y-1.5">
-          {text.split('\n').filter(l => l.trim()).map((line, i) => (
-            <p key={i} className="text-xs text-text-secondary leading-relaxed">{line}</p>
-          ))}
-        </div>
+      <div className="border border-dashed border-border rounded-lg px-5 py-8 mb-6 text-center">
+        <p className="text-sm text-text-secondary">아직 분석된 인사이트가 없습니다</p>
+        <p className="text-xs text-text-tertiary mt-1">다음 수집 시 자동으로 분석됩니다</p>
       </div>
     )
   }
 
-  // ── loading (sections streaming in) or done ──
   return (
     <div className="mb-6 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-text-primary">AI 리뷰 분석</p>
-          {status === 'loading' && (
-            <div className="w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          )}
-          {status === 'done' && (
-            <span className="text-[11px] text-text-tertiary">저장됨</span>
-          )}
-        </div>
-        {status === 'done' && (
-          <button onClick={run}
-                  className="text-xs text-text-tertiary hover:text-text-secondary transition-colors">
-            재분석
-          </button>
-        )}
+        <p className="text-sm font-semibold text-text-primary">AI 리뷰 분석</p>
+        <span className="text-[11px] text-text-tertiary">
+          {latest.created_at} · {latest.review_count}개 리뷰 기준
+        </span>
       </div>
 
-      <InsightSections text={text} />
+      <InsightSections text={latest.content} />
 
-      {status === 'done' && (
-        <div className="pt-1">
-          <button onClick={toggleHistory}
-                  className="text-xs text-text-tertiary hover:text-text-secondary transition-colors">
-            {showHistory ? '이력 숨기기 ▲' : '이전 분석 이력 보기 ▼'}
-          </button>
-          {showHistory && (
-            <HistoryList
-              entries={history}
-              loading={histLoading}
-              expandedId={expandedId}
-              onToggle={id => setExpanded(v => v === id ? null : id)}
-            />
-          )}
+      {history.length > 0 && (
+        <div className="pt-1 border-t border-border mt-3">
+          <p className="text-xs text-text-tertiary font-medium py-2">이전 분석</p>
+          <HistoryList
+            entries={history}
+            loading={false}
+            expandedId={expandedId}
+            onToggle={id => setExpanded(v => v === id ? null : id)}
+          />
         </div>
       )}
     </div>
