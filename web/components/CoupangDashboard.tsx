@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import SectionDivider from '@/components/SectionDivider'
 
-// ─── 타입 ────────────────────────────────────────────────
+// ─── 타입 ──────────────────────────────────────────────────────────────────────
 
 interface CoupangStats {
   total_reviews: number
@@ -54,7 +54,7 @@ interface CategoryRanking {
   rank_hour: number
 }
 
-// ─── 상수 ────────────────────────────────────────────────
+// ─── 상수 ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { id: 'today',    label: '오늘 현황' },
@@ -72,7 +72,7 @@ const RATING_FILTERS: { value: RatingFilter; label: string }[] = [
   { value: 'negative',  label: '불만족' },
 ]
 
-// ─── 헬퍼 ────────────────────────────────────────────────
+// ─── 헬퍼 ──────────────────────────────────────────────────────────────────────
 
 function ratingColor(r: number | null) {
   const n = r ?? 0
@@ -93,49 +93,171 @@ function shortProductName(name: string | null): string {
   return name.replace(/\[.*?\]\s*/g, '').replace(/^셀퓨전씨\s*/i, '').slice(0, 18).trim()
 }
 
-// ─── DeltaBadge ──────────────────────────────────────────
+function generateCatInsights(catList: CategoryRanking[]): string[] {
+  const msgs: string[] = []
+
+  const risers = catList
+    .filter(e => (e.delta ?? 0) >= 5)
+    .sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0))
+    .slice(0, 3)
+  for (const r of risers) {
+    msgs.push(`${r.category_name} · ${r.product_name} +${r.delta}위 급상승 (현재 ${r.rank_position}위)`)
+  }
+
+  const newTop10 = catList.filter(e => e.prev_rank == null && e.rank_position <= 10)
+  if (newTop10.length > 0) {
+    msgs.push(`신규 Top 10 진입 ${newTop10.length}개 상품 감지`)
+  }
+
+  const ours = catList.filter(e => e.is_ours)
+  for (const e of ours) {
+    const d = e.delta != null && e.delta !== 0
+      ? (e.delta > 0 ? ` ▲${e.delta}` : ` ▼${Math.abs(e.delta)}`)
+      : ''
+    msgs.push(`셀퓨전씨 ${e.category_name} ${e.rank_position}위${d}`)
+  }
+
+  return msgs.length > 0 ? msgs : ['오늘 카테고리 순위 데이터가 수집되었습니다']
+}
+
+// ─── DeltaBadge ────────────────────────────────────────────────────────────────
 
 function DeltaBadge({ delta, prevRank }: { delta: number | null; prevRank: number | null }) {
-  if (prevRank === null) {
-    return (
-      <span className="inline-flex items-center text-2xs font-semibold px-1.5 py-0.5 rounded
-                       bg-blue-50 text-blue-600 border border-blue-100 shrink-0">
-        NEW
-      </span>
-    )
-  }
-  if (delta === null || delta === 0) {
-    return <span className="text-2xs text-text-tertiary shrink-0 w-8 text-right">-</span>
-  }
-  if (delta > 0) {
-    return (
-      <span className="text-2xs font-bold text-emerald-600 shrink-0 w-8 text-right">
-        ▲{delta}
-      </span>
-    )
-  }
+  if (prevRank === null)
+    return <span className="text-[11px] text-emerald-600 font-semibold w-9 shrink-0 text-right">NEW</span>
+  if (delta == null || delta === 0)
+    return <span className="text-[11px] text-text-tertiary w-9 shrink-0 text-right">-</span>
+  const up = delta > 0
   return (
-    <span className="text-2xs font-bold text-red-500 shrink-0 w-8 text-right">
-      ▼{Math.abs(delta)}
+    <span className={`text-[11px] font-semibold w-9 shrink-0 text-right ${up ? 'text-emerald-600' : 'text-red-500'}`}>
+      {up ? `▲${delta}` : `▼${Math.abs(delta)}`}
     </span>
   )
 }
 
-// ─── RankBadge (순위 숫자 색상) ──────────────────────────
+// ─── RankEntry ─────────────────────────────────────────────────────────────────
 
-function RankBadge({ pos }: { pos: number }) {
-  const gold   = pos === 1 ? 'text-yellow-500' : ''
-  const silver = pos === 2 ? 'text-slate-400'  : ''
-  const bronze = pos === 3 ? 'text-amber-600'  : ''
-  const rest   = pos  > 3 ? 'text-text-tertiary' : ''
+interface RankItem {
+  rank_position: number
+  product_name: string | null
+  is_ours: boolean
+  delta: number | null
+  prev_rank: number | null
+}
+
+function RankEntry({ item }: { item: RankItem }) {
+  const isTop3 = item.rank_position <= 3
   return (
-    <span className={`text-sm font-bold w-7 text-right shrink-0 ${gold || silver || bronze || rest}`}>
-      {pos}
-    </span>
+    <div className={`flex items-start gap-2 px-3 py-1.5 rounded-md
+      ${item.is_ours ? 'bg-accent-bg border border-accent-border' : 'hover:bg-gray-50'}`}>
+      <span className={`text-sm w-7 shrink-0 text-right leading-tight mt-0.5
+        ${isTop3 ? 'text-accent font-semibold' : 'text-text-secondary font-normal'}`}>
+        {item.rank_position}
+      </span>
+      <span className={`flex-1 min-w-0 text-xs leading-snug break-keep
+        ${item.is_ours ? 'text-accent-fg font-medium' : 'text-text-primary'}`}>
+        {item.is_ours && <span className="text-accent mr-1">★</span>}
+        {item.product_name ?? '-'}
+      </span>
+      <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
+    </div>
   )
 }
 
-// ─── ReviewCard ──────────────────────────────────────────
+// ─── CategoryPanel ─────────────────────────────────────────────────────────────
+
+function CategoryPanel({ catName, items }: { catName: string; items: CategoryRanking[] }) {
+  const [showAll, setShowAll] = useState(false)
+
+  const hasDeltas = items.some(e => e.delta != null)
+
+  const risers = hasDeltas
+    ? items.filter(e => (e.delta ?? 0) >= 3).sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0)).slice(0, 5)
+    : []
+
+  const newTop20 = hasDeltas
+    ? items.filter(e => e.prev_rank == null && e.rank_position <= 20).slice(0, 3)
+    : []
+
+  const riserIds = new Set(risers.map(e => e.product_id))
+  const alertNew = newTop20.filter(e => !riserIds.has(e.product_id))
+
+  const displayItems = showAll ? items : items.slice(0, 10)
+
+  return (
+    <div className="border border-border rounded-lg bg-surface p-4 space-y-4">
+      <p className="text-sm font-semibold text-text-primary">{catName}</p>
+
+      {(risers.length > 0 || alertNew.length > 0) && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium text-text-secondary mb-1">급상승</p>
+          {risers.map(e => <RankEntry key={`r-${e.product_id}`} item={e} />)}
+          {alertNew.map(e => (
+            <div key={`n-${e.product_id}`}
+                 className="flex items-start gap-2 px-3 py-1.5 rounded-md hover:bg-gray-50">
+              <span className="text-sm w-7 shrink-0 text-right text-text-tertiary leading-tight mt-0.5">
+                {e.rank_position}
+              </span>
+              <span className="flex-1 min-w-0 text-xs leading-snug break-keep text-text-primary">
+                {e.product_name}
+              </span>
+              <span className="text-[11px] text-emerald-600 font-semibold w-9 shrink-0 text-right">NEW</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-0.5">
+        <p className="text-[11px] font-medium text-text-secondary mb-1">
+          Top {showAll ? items.length : Math.min(10, items.length)}
+        </p>
+        {displayItems.map(item => <RankEntry key={item.rank_position} item={item} />)}
+        {items.length > 10 && (
+          <button
+            onClick={() => setShowAll(v => !v)}
+            className="w-full text-xs text-text-tertiary hover:text-text-secondary py-2 border-t border-border-subtle mt-1"
+          >
+            {showAll ? '접기 ▲' : `${items.length - 10}개 더 보기 ▼`}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── SearchKeywordPanel ────────────────────────────────────────────────────────
+
+function SearchKeywordPanel({ keyword, items }: { keyword: string; items: SearchRanking[] }) {
+  const [showAll, setShowAll] = useState(false)
+  const ours = items.filter(r => r.is_ours)
+  const displayItems = showAll ? items : items.slice(0, 10)
+
+  return (
+    <div className="border border-border rounded-lg bg-surface p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-text-primary">{keyword}</p>
+        {ours.length > 0 && (
+          <span className="text-xs font-semibold text-accent">
+            자사 {ours.map(r => `${r.rank_position}위`).join(' · ')}
+          </span>
+        )}
+      </div>
+      <div className="space-y-0.5">
+        {displayItems.map(item => <RankEntry key={item.product_id} item={item} />)}
+        {items.length > 10 && (
+          <button
+            onClick={() => setShowAll(v => !v)}
+            className="w-full text-xs text-text-tertiary hover:text-text-secondary py-2 border-t border-border-subtle mt-1"
+          >
+            {showAll ? '접기 ▲' : `${items.length - 10}개 더 보기 ▼`}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── ReviewCard ────────────────────────────────────────────────────────────────
 
 const PREVIEW_LEN = 120
 
@@ -148,9 +270,9 @@ function CoupangReviewCard({
   index?: number
 }) {
   const [expanded, setExpanded] = useState(false)
-  const content   = review.content ?? ''
-  const isLong    = content.length > PREVIEW_LEN
-  const color     = ratingColor(review.rating)
+  const content  = review.content ?? ''
+  const isLong   = content.length > PREVIEW_LEN
+  const color    = ratingColor(review.rating)
   const shortName = shortProductName(review.product_name)
 
   return (
@@ -217,7 +339,7 @@ function CoupangReviewCard({
   )
 }
 
-// ─── 메인 컴포넌트 ────────────────────────────────────────
+// ─── 메인 ──────────────────────────────────────────────────────────────────────
 
 export default function CoupangDashboard() {
   const [active, setActive]     = useState<TabId>('today')
@@ -234,6 +356,7 @@ export default function CoupangDashboard() {
   const [hasMore, setHasMore]                 = useState(false)
   const [reviewLoading, setReviewLoading]     = useState(false)
   const [loadingMore, setLoadingMore]         = useState(false)
+  const [showOursOnly, setShowOursOnly]       = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -300,30 +423,26 @@ export default function CoupangDashboard() {
   const searchList = rankings?.search   ?? []
 
   const catGroups = catList.reduce<Record<string, CategoryRanking[]>>((acc, r) => {
-    const key = r.category_name ?? '기타'
-    acc[key]  = acc[key] ?? []
-    acc[key].push(r)
+    acc[r.category_name] = acc[r.category_name] ?? []
+    acc[r.category_name].push(r)
     return acc
   }, {})
 
   const searchGroups = searchList.reduce<Record<string, SearchRanking[]>>((acc, r) => {
-    const key = r.keyword ?? '기타'
-    acc[key]  = acc[key] ?? []
-    acc[key].push(r)
+    acc[r.keyword] = acc[r.keyword] ?? []
+    acc[r.keyword].push(r)
     return acc
   }, {})
 
-  // 자사 카테고리 상품 (오늘 현황)
-  const ourCatProducts = catList.filter(r => r.is_ours)
+  const catInsights = generateCatInsights(catList)
 
-  // 급상승 (delta ≥ 5, 자사/타사 무관)
-  const topRisers = catList
-    .filter(r => (r.delta ?? 0) >= 5)
-    .sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0))
-    .slice(0, 8)
-
-  // 자사 검색 노출 요약 (검색순위 탭 상단)
-  const ourSearchItems = searchList.filter(r => r.is_ours)
+  const filteredCatGroups = showOursOnly
+    ? Object.fromEntries(
+        Object.entries(catGroups)
+          .map(([k, v]) => [k, v.filter(e => e.is_ours)] as [string, CategoryRanking[]])
+          .filter(([, v]) => v.length > 0)
+      )
+    : catGroups
 
   return (
     <div className="space-y-8">
@@ -375,84 +494,49 @@ export default function CoupangDashboard() {
             오늘 현황
         ══════════════════════════════════════ */}
         {active === 'today' && (
-          <div className="space-y-10">
+          <div className="space-y-6">
+            <div>
+              <SectionDivider tag="시장 현황" />
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-text-primary">쿠팡 카테고리 베스트</h2>
+                <span className="text-sm text-text-tertiary">Top 100 기준</span>
+                <button
+                  onClick={() => setShowOursOnly(v => !v)}
+                  className={`ml-auto text-xs font-semibold px-3 py-1.5 rounded border transition-colors ${
+                    showOursOnly
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                      : 'bg-surface border-border text-text-secondary hover:border-accent hover:text-accent'
+                  }`}
+                >
+                  자사만 보기
+                </button>
+              </div>
+            </div>
 
-            {/* 자사 입점 현황 */}
-            {ourCatProducts.length > 0 ? (
-              <div>
-                <SectionDivider tag="자사 입점 현황" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {ourCatProducts.map((r, i) => (
-                    <div key={i}
-                         className="flex items-center gap-3 px-4 py-4 rounded-xl border border-accent/30 bg-accent-bg">
-                      <div className="flex flex-col items-center shrink-0 w-14">
-                        <span className="text-2xl font-bold text-accent leading-none">{r.rank_position}위</span>
-                        <DeltaBadge delta={r.delta} prevRank={r.prev_rank} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-accent mb-0.5">{r.category_name}</p>
-                        <p className="text-sm text-text-primary leading-snug line-clamp-2">{r.product_name}</p>
-                      </div>
-                    </div>
+            {catList.length > 0 && (
+              <div className="bg-accent-bg border border-accent-border rounded-lg px-4 py-3.5">
+                <p className="text-xs font-semibold text-accent mb-2.5">오늘의 시장 현황</p>
+                <ul className="space-y-1">
+                  {catInsights.map((msg, i) => (
+                    <li key={i} className="text-sm text-accent-fg flex items-start gap-1.5">
+                      <span className="text-accent shrink-0 mt-0.5">·</span>
+                      <span>{msg}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
+              </div>
+            )}
+
+            {Object.keys(filteredCatGroups).length === 0 ? (
+              <div className="border border-dashed border-border rounded-lg px-6 py-12 text-center">
+                <p className="text-sm text-text-secondary">카테고리 순위 데이터가 없어요</p>
+                <p className="text-xs text-text-tertiary mt-1">수집 후 데이터가 표시됩니다</p>
               </div>
             ) : (
-              <div className="border border-dashed border-border rounded-lg px-6 py-12 text-center">
-                <p className="text-sm text-text-secondary">카테고리 내 자사 상품이 없어요</p>
-                <p className="text-xs text-text-tertiary mt-1">순위 수집 후 데이터가 표시됩니다</p>
-              </div>
-            )}
-
-            {/* 급상승 브랜드 */}
-            {topRisers.length > 0 && (
-              <div>
-                <SectionDivider tag="급상승 (▲5↑)" />
-                <div className="space-y-2">
-                  {topRisers.map((r, i) => (
-                    <div key={i}
-                         className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${
-                           r.is_ours ? 'border-accent/30 bg-accent-bg' : 'border-border bg-surface'
-                         }`}>
-                      <span className="text-xs font-bold text-text-tertiary w-4 shrink-0">{i + 1}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-background border border-border text-text-secondary shrink-0">
-                        {r.category_name}
-                      </span>
-                      <span className={`text-sm flex-1 truncate ${r.is_ours ? 'text-accent font-semibold' : 'text-text-primary'}`}>
-                        {r.product_name}
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-sm font-bold text-text-secondary">{r.rank_position}위</span>
-                        <span className="text-sm font-bold text-emerald-600">▲{r.delta}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 카테고리별 Top 10 */}
-            {Object.keys(catGroups).length > 0 && (
-              <div>
-                <SectionDivider tag="카테고리별 Top 10" />
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {Object.entries(catGroups).map(([cat, items]) => (
-                    <div key={cat} className="rounded-lg border border-border bg-surface px-4 py-4">
-                      <p className="text-xs font-semibold text-text-secondary mb-3">{cat}</p>
-                      <ol className="space-y-1.5">
-                        {items.slice(0, 10).map(item => (
-                          <li key={item.rank_position} className="flex items-center gap-2 text-sm">
-                            <RankBadge pos={item.rank_position} />
-                            <span className={`truncate flex-1 ${item.is_ours ? 'text-accent font-semibold' : 'text-text-primary'}`}>
-                              {item.product_name}
-                            </span>
-                            <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  ))}
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {Object.entries(filteredCatGroups).map(([cat, items]) => (
+                  <CategoryPanel key={cat} catName={cat} items={items} />
+                ))}
               </div>
             )}
           </div>
@@ -555,55 +639,45 @@ export default function CoupangDashboard() {
             검색순위
         ══════════════════════════════════════ */}
         {active === 'search' && (
-          <div className="space-y-8">
+          <div className="space-y-6">
+            <div>
+              <SectionDivider tag="검색 순위" />
+              <h2 className="text-xl font-semibold text-text-primary">키워드별 검색 순위</h2>
+            </div>
 
-            {/* 자사 검색 노출 요약 */}
-            {ourSearchItems.length > 0 && (
-              <div>
-                <SectionDivider tag="자사 검색 노출 요약" />
-                <div className="flex flex-wrap gap-2">
-                  {ourSearchItems.map((item, i) => (
-                    <div key={i}
-                         className="flex items-center gap-2 px-3 py-2 rounded-lg border border-accent/30 bg-accent-bg">
-                      <span className="text-xs text-text-secondary">{item.keyword}</span>
-                      <span className="text-sm font-bold text-accent">{item.rank_position}위</span>
-                      <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
-                    </div>
-                  ))}
-                </div>
+            {searchList.some(r => r.is_ours) && (
+              <div className="bg-accent-bg border border-accent-border rounded-lg px-4 py-3.5">
+                <p className="text-xs font-semibold text-accent mb-2.5">자사 검색 노출 현황</p>
+                <ul className="space-y-1">
+                  {Object.entries(searchGroups).map(([kw, items]) => {
+                    const ours = items.filter(r => r.is_ours)
+                    if (!ours.length) return null
+                    const top = ours[0]
+                    const d = top.delta != null && top.delta !== 0
+                      ? (top.delta > 0 ? ` ▲${top.delta}` : ` ▼${Math.abs(top.delta)}`)
+                      : ''
+                    return (
+                      <li key={kw} className="text-sm text-accent-fg flex items-start gap-1.5">
+                        <span className="text-accent shrink-0 mt-0.5">·</span>
+                        <span>{kw} — {top.rank_position}위{d}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
               </div>
             )}
 
-            {/* 키워드별 전체 목록 */}
             {Object.keys(searchGroups).length === 0 ? (
               <div className="border border-dashed border-border rounded-lg px-6 py-12 text-center">
                 <p className="text-sm text-text-secondary">검색순위 데이터가 없어요</p>
                 <p className="text-xs text-text-tertiary mt-1">수집 후 데이터가 표시됩니다</p>
               </div>
             ) : (
-              Object.entries(searchGroups).map(([keyword, items]) => (
-                <div key={keyword}>
-                  <SectionDivider tag={`키워드: ${keyword}`} />
-                  <div className="space-y-1.5">
-                    {items.map(item => (
-                      <div
-                        key={item.product_id}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${
-                          item.is_ours
-                            ? 'border-accent/30 bg-accent-bg'
-                            : 'border-border bg-surface'
-                        }`}
-                      >
-                        <RankBadge pos={item.rank_position} />
-                        <span className={`text-sm truncate flex-1 ${item.is_ours ? 'text-accent font-semibold' : 'text-text-primary'}`}>
-                          {item.product_name ?? '-'}
-                        </span>
-                        <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.entries(searchGroups).map(([keyword, items]) => (
+                  <SearchKeywordPanel key={keyword} keyword={keyword} items={items} />
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -612,34 +686,26 @@ export default function CoupangDashboard() {
             카테고리 순위
         ══════════════════════════════════════ */}
         {active === 'category' && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="space-y-6">
+            <div>
+              <SectionDivider tag="카테고리 순위" />
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold text-text-primary">쿠팡 카테고리 베스트셀러</h2>
+                <span className="text-sm text-text-tertiary">Top 100</span>
+              </div>
+            </div>
+
             {Object.keys(catGroups).length === 0 ? (
-              <div className="sm:col-span-3 border border-dashed border-border rounded-lg px-6 py-12 text-center">
+              <div className="border border-dashed border-border rounded-lg px-6 py-12 text-center">
                 <p className="text-sm text-text-secondary">카테고리 순위 데이터가 없어요</p>
                 <p className="text-xs text-text-tertiary mt-1">수집 후 데이터가 표시됩니다</p>
               </div>
             ) : (
-              Object.entries(catGroups).map(([cat, items]) => (
-                <div key={cat}>
-                  <SectionDivider tag={cat} />
-                  <ol className="space-y-1.5">
-                    {items.slice(0, 50).map(item => (
-                      <li
-                        key={item.rank_position}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border ${
-                          item.is_ours ? 'border-accent/30 bg-accent-bg' : 'border-border bg-surface'
-                        }`}
-                      >
-                        <RankBadge pos={item.rank_position} />
-                        <span className={`text-sm truncate flex-1 ${item.is_ours ? 'text-accent font-semibold' : 'text-text-primary'}`}>
-                          {item.product_name}
-                        </span>
-                        <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              ))
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {Object.entries(catGroups).map(([cat, items]) => (
+                  <CategoryPanel key={cat} catName={cat} items={items} />
+                ))}
+              </div>
             )}
           </div>
         )}
