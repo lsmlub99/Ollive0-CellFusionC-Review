@@ -3,6 +3,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Loader2 } from 'lucide-react'
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, LabelList,
+} from 'recharts'
 import SectionDivider from '@/components/SectionDivider'
 
 // ─── 타입 ──────────────────────────────────────────────────────────────────────
@@ -253,6 +257,216 @@ function SearchKeywordPanel({ keyword, items }: { keyword: string; items: Search
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── 순위 추이 차트 ────────────────────────────────────────────────────────────
+
+interface RankHistoryEntry {
+  product_id: string
+  product_name: string
+  is_ours: boolean
+  category_name: string
+  history: { date: string; rank: number }[]
+}
+
+const CHART_COLORS = ['#2563EB', '#16A34A', '#DC2626', '#9333EA', '#EA580C', '#0891B2', '#CA8A04', '#DB2777']
+
+function shortName(name: string) {
+  return name.replace(/\[.*?\]\s*/g, '').replace(/^셀퓨전씨\s*/i, '').slice(0, 16).trim()
+}
+
+function RankChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl space-y-1 min-w-[140px]">
+      <p className="text-gray-400 font-medium border-b border-gray-700 pb-1 mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+          <span className="flex-1 truncate">{p.name}</span>
+          <strong>{p.value}위</strong>
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function RankChartLabel({ x, y, value, color }: any) {
+  if (value == null) return null
+  return (
+    <text x={x} y={y - 7} textAnchor="middle" fontSize={10} fontWeight="600" fill={color}>
+      {value}위
+    </text>
+  )
+}
+
+function CoupangProductCheckDropdown({
+  items, selected, onChange,
+}: {
+  items: RankHistoryEntry[]
+  selected: Set<string>
+  onChange: (s: Set<string>) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-surface
+                   text-xs text-text-secondary hover:border-accent hover:text-accent transition-colors"
+      >
+        <span>{selected.size}/{items.length} 선택</span>
+        <ChevronDown size={11} className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-30 bg-surface border border-border rounded-lg
+                          shadow-lg w-60 max-h-64 overflow-y-auto">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border sticky top-0 bg-surface">
+              <span className="text-[11px] text-text-tertiary font-medium">상품 선택</span>
+              <div className="flex gap-2.5">
+                <button onClick={() => onChange(new Set(items.map(i => i.product_id)))}
+                        className="text-[11px] text-accent hover:underline">전체</button>
+                <button onClick={() => onChange(new Set())}
+                        className="text-[11px] text-text-tertiary hover:underline">해제</button>
+              </div>
+            </div>
+            {items.map((item, i) => {
+              const color = CHART_COLORS[i % CHART_COLORS.length]
+              return (
+                <label key={item.product_id}
+                       className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(item.product_id)}
+                    onChange={() => {
+                      const next = new Set(selected)
+                      if (next.has(item.product_id)) next.delete(item.product_id)
+                      else next.add(item.product_id)
+                      onChange(next)
+                    }}
+                    className="w-3.5 h-3.5 rounded"
+                    style={{ accentColor: color }}
+                  />
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                  <span className={`text-xs truncate flex-1 ${item.is_ours ? 'text-accent font-medium' : 'text-text-primary'}`}>
+                    {item.is_ours && '★ '}{shortName(item.product_name)}
+                  </span>
+                  <span className="text-[11px] text-text-tertiary shrink-0">
+                    {item.history.at(-1)?.rank ?? '-'}위
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function CoupangCategoryChart({ catName, entries }: { catName: string; entries: RankHistoryEntry[] }) {
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(entries.filter(e => e.is_ours).map(e => e.product_id).slice(0, 5)
+                         .concat(entries.filter(e => !e.is_ours).map(e => e.product_id).slice(0, 3)))
+  )
+
+  const filtered   = entries.filter(e => selected.has(e.product_id))
+  const allDates   = [...new Set(filtered.flatMap(e => e.history.map(h => h.date)))].sort()
+
+  const chartData = allDates.map(date => {
+    const point: Record<string, any> = { date: date.slice(5) }
+    for (const e of filtered) {
+      const h = e.history.find(h => h.date === date)
+      if (h) point[e.product_id] = h.rank
+    }
+    return point
+  })
+
+  const currentRanks = filtered.map(e => ({
+    ...e,
+    current: e.history.at(-1)?.rank ?? null,
+    prev:    e.history.at(-2)?.rank ?? null,
+  }))
+
+  return (
+    <div className="border border-border rounded-lg bg-surface p-4 md:p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-text-primary">{catName}</p>
+        <CoupangProductCheckDropdown items={entries} selected={selected} onChange={setSelected} />
+      </div>
+
+      {/* 현재 순위 칩 */}
+      <div className="flex flex-wrap gap-2">
+        {currentRanks.map((e, i) => {
+          const color = CHART_COLORS[i % CHART_COLORS.length]
+          const delta = e.prev != null && e.current != null ? e.prev - e.current : null
+          return (
+            <div key={e.product_id}
+                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                   e.is_ours ? 'border-accent-border bg-accent-bg' : 'border-border bg-surface'
+                 }`}>
+              <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+              <span className={`text-xs font-medium ${e.is_ours ? 'text-accent' : 'text-text-primary'}`}>
+                {shortName(e.product_name)}
+              </span>
+              <span className="text-base font-bold" style={{ color }}>
+                {e.current != null ? `${e.current}위` : '-'}
+              </span>
+              {delta !== null && delta !== 0 && (
+                <span className={`text-xs font-semibold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {delta > 0 ? `▲${delta}` : `▼${Math.abs(delta)}`}
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {allDates.length >= 2 ? (
+        <ResponsiveContainer width="100%" height={filtered.length > 3 ? 220 : 180}>
+          <LineChart data={chartData} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
+            <XAxis dataKey="date"
+                   tick={{ fontSize: 11, fill: '#57534E', fontWeight: 500 }}
+                   axisLine={false} tickLine={false} />
+            <YAxis reversed
+                   domain={['dataMin - 3', 'dataMax + 3']}
+                   tick={{ fontSize: 10, fill: '#78716C' }}
+                   axisLine={false} tickLine={false}
+                   width={32}
+                   tickFormatter={(v) => `${v}위`} />
+            <Tooltip content={<RankChartTooltip />} cursor={{ stroke: 'rgba(0,0,0,0.06)', strokeWidth: 1 }} />
+            {filtered.map((e, i) => {
+              const color = CHART_COLORS[i % CHART_COLORS.length]
+              return (
+                <Line key={e.product_id}
+                      dataKey={e.product_id}
+                      name={shortName(e.product_name)}
+                      stroke={color}
+                      strokeWidth={e.is_ours ? 3 : 1.5}
+                      strokeDasharray={e.is_ours ? undefined : '4 2'}
+                      dot={{ r: e.is_ours ? 4 : 3, fill: color, strokeWidth: 0 }}
+                      activeDot={{ r: 6, fill: color, strokeWidth: 2, stroke: '#fff' }}
+                      connectNulls={false}>
+                  {e.is_ours && (
+                    <LabelList dataKey={e.product_id}
+                               content={(props: any) => <RankChartLabel {...props} color={color} />} />
+                  )}
+                </Line>
+              )
+            })}
+          </LineChart>
+        </ResponsiveContainer>
+      ) : (
+        <p className="text-xs text-text-tertiary py-4 text-center">
+          {selected.size === 0
+            ? '상품을 선택하세요'
+            : '데이터가 2일 이상 쌓이면 추이 그래프가 표시됩니다'}
+        </p>
+      )}
     </div>
   )
 }
@@ -631,7 +845,9 @@ export default function CoupangDashboard() {
   const [hasMore, setHasMore]                 = useState(false)
   const [reviewLoading, setReviewLoading]     = useState(false)
   const [loadingMore, setLoadingMore]         = useState(false)
-  const [showOursOnly, setShowOursOnly]       = useState(false)
+  const [showOursOnly, setShowOursOnly]         = useState(false)
+  const [rankHistory, setRankHistory]           = useState<Record<string, RankHistoryEntry[]> | null>(null)
+  const [rankHistoryLoading, setRHLoading]      = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -674,6 +890,15 @@ export default function CoupangDashboard() {
   }, [])
 
   useEffect(() => { fetchReviews('', 'all', 0) }, [fetchReviews])
+
+  useEffect(() => {
+    if (active !== 'category' || rankHistory !== null) return
+    setRHLoading(true)
+    fetch('/api/coupang/rank-history')
+      .then(r => r.ok ? r.json() : {})
+      .then(d => { setRankHistory(d); setRHLoading(false) })
+      .catch(() => setRHLoading(false))
+  }, [active, rankHistory])
 
   const handleProductChange = (id: string) => {
     setSelectedProduct(id)
@@ -962,14 +1187,45 @@ export default function CoupangDashboard() {
             카테고리 순위
         ══════════════════════════════════════ */}
         {active === 'category' && (
-          <div className="space-y-6">
-            <div>
-              <SectionDivider tag="카테고리 순위" />
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-semibold text-text-primary">쿠팡 카테고리 베스트셀러</h2>
-                <span className="text-sm text-text-tertiary">Top 100</span>
+          <div className="space-y-8">
+
+            {/* 순위 추이 차트 */}
+            <div className="space-y-4">
+              <div>
+                <SectionDivider tag="순위 추이" />
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-semibold text-text-primary">카테고리 순위 추이</h2>
+                  <span className="text-sm text-text-tertiary">자사 상품 기본 선택 · 상품 추가 가능</span>
+                </div>
               </div>
+              {rankHistoryLoading ? (
+                <div className="flex items-center gap-2 text-sm text-text-secondary py-6">
+                  <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                  순위 이력 불러오는 중...
+                </div>
+              ) : rankHistory && Object.keys(rankHistory).length > 0 ? (
+                <div className="space-y-4">
+                  {Object.entries(rankHistory).map(([cat, entries]) => (
+                    <CoupangCategoryChart key={cat} catName={cat} entries={entries} />
+                  ))}
+                </div>
+              ) : (
+                <div className="border border-dashed border-border rounded-lg px-6 py-8 text-center">
+                  <p className="text-sm text-text-secondary">순위 이력 데이터가 없어요</p>
+                  <p className="text-xs text-text-tertiary mt-1">수집 후 추이 그래프가 표시됩니다</p>
+                </div>
+              )}
             </div>
+
+            {/* 현재 순위 목록 */}
+            <div className="space-y-4">
+              <div>
+                <SectionDivider tag="현재 순위" />
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-semibold text-text-primary">쿠팡 카테고리 베스트셀러</h2>
+                  <span className="text-sm text-text-tertiary">Top 100</span>
+                </div>
+              </div>
 
             {Object.keys(catGroups).length === 0 ? (
               <div className="border border-dashed border-border rounded-lg px-6 py-12 text-center">
@@ -983,6 +1239,7 @@ export default function CoupangDashboard() {
                 ))}
               </div>
             )}
+            </div>
           </div>
         )}
 

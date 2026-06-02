@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, LabelList,
@@ -53,51 +54,133 @@ function RankLabel({ x, y, value, color }: any) {
   )
 }
 
+function ProductCheckDropdown<T extends string>({
+  items, selected, onChange, labelFn, colorFn,
+}: {
+  items: { id: T; label: string }[]
+  selected: Set<T>
+  onChange: (s: Set<T>) => void
+  labelFn?: (label: string) => string
+  colorFn?: (idx: number) => string
+}) {
+  const [open, setOpen] = useState(false)
+  const label = labelFn ?? (x => x)
+  const color = colorFn ?? ((i: number) => COLORS[i % COLORS.length])
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-surface
+                   text-xs text-text-secondary hover:border-accent hover:text-accent transition-colors"
+      >
+        <span>{selected.size}/{items.length} 선택</span>
+        <ChevronDown size={11} className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-30 bg-surface border border-border rounded-lg
+                          shadow-lg w-56 max-h-64 overflow-y-auto">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border sticky top-0 bg-surface">
+              <span className="text-[11px] text-text-tertiary font-medium">상품 선택</span>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => onChange(new Set(items.map(i => i.id)))}
+                  className="text-[11px] text-accent hover:underline"
+                >전체</button>
+                <button
+                  onClick={() => onChange(new Set())}
+                  className="text-[11px] text-text-tertiary hover:underline"
+                >해제</button>
+              </div>
+            </div>
+            {items.map((item, i) => (
+              <label key={item.id}
+                     className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selected.has(item.id)}
+                  onChange={() => {
+                    const next = new Set(selected)
+                    if (next.has(item.id)) next.delete(item.id)
+                    else next.add(item.id)
+                    onChange(next)
+                  }}
+                  className="w-3.5 h-3.5 rounded"
+                  style={{ accentColor: color(i) }}
+                />
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color(i) }} />
+                <span className="text-xs text-text-primary truncate">{label(item.label)}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function CategoryChart({ items }: { items: ProductRankingData[] }) {
-  const allDates = [...new Set(items.flatMap(d => d.history.map(h => h.date)))].sort()
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(items.slice(0, 5).map(i => i.goods_no))
+  )
+
+  const filteredItems = items.filter(i => selected.has(i.goods_no))
+  const allDates = [...new Set(filteredItems.flatMap(d => d.history.map(h => h.date)))].sort()
 
   const chartData = allDates.map(date => {
     const point: Record<string, any> = { date: date.slice(5) }
-    for (const item of items) {
+    for (const item of filteredItems) {
       const h = item.history.find(h => h.date === date)
       if (h) point[item.goods_no] = h.rank
     }
     return point
   })
 
-  const currentRanks = items.map(item => ({
+  const currentRanks = filteredItems.map(item => ({
     ...item,
     current: item.history.at(-1)?.rank ?? null,
     prev:    item.history.at(-2)?.rank ?? null,
   }))
 
+  const dropItems = items.map(i => ({ id: i.goods_no, label: i.goods_name }))
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {currentRanks.map((item, i) => {
-          const color = COLORS[i % COLORS.length]
-          const delta = item.prev != null && item.current != null ? item.prev - item.current : null
-          return (
-            <div key={item.goods_no}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-surface"
-            >
-              <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
-              <span className="text-xs text-text-primary font-medium">{extractShortName(item.goods_name)}</span>
-              <span className="text-base font-bold" style={{ color }}>
-                {item.current != null ? `${item.current}위` : '-'}
-              </span>
-              {delta !== null && delta !== 0 && (
-                <span className={`text-xs font-semibold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                  {delta > 0 ? `▲${delta}` : `▼${Math.abs(delta)}`}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap gap-2 flex-1">
+          {currentRanks.map((item, i) => {
+            const color = COLORS[i % COLORS.length]
+            const delta = item.prev != null && item.current != null ? item.prev - item.current : null
+            return (
+              <div key={item.goods_no}
+                   className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-surface">
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-xs text-text-primary font-medium">{extractShortName(item.goods_name)}</span>
+                <span className="text-base font-bold" style={{ color }}>
+                  {item.current != null ? `${item.current}위` : '-'}
                 </span>
-              )}
-            </div>
-          )
-        })}
+                {delta !== null && delta !== 0 && (
+                  <span className={`text-xs font-semibold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {delta > 0 ? `▲${delta}` : `▼${Math.abs(delta)}`}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <ProductCheckDropdown
+          items={dropItems}
+          selected={selected}
+          onChange={setSelected}
+          labelFn={extractShortName}
+        />
       </div>
 
-      {allDates.length >= 2 && (
-        <ResponsiveContainer width="100%" height={items.length > 3 ? 220 : 180}>
+      {allDates.length >= 2 ? (
+        <ResponsiveContainer width="100%" height={filteredItems.length > 3 ? 220 : 180}>
           <LineChart data={chartData} margin={{ top: 20, right: 8, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="date"
@@ -113,7 +196,7 @@ function CategoryChart({ items }: { items: ProductRankingData[] }) {
               tickFormatter={(v) => `${v}위`}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(0,0,0,0.06)', strokeWidth: 1 }} />
-            {items.map((item, i) => {
+            {filteredItems.map((item, i) => {
               const color = COLORS[i % COLORS.length]
               return (
                 <Line
@@ -126,17 +209,15 @@ function CategoryChart({ items }: { items: ProductRankingData[] }) {
                   activeDot={{ r: 6, fill: color, strokeWidth: 2, stroke: '#fff' }}
                   connectNulls={false}
                 >
-                  <LabelList dataKey={item.goods_no} content={(props) => <RankLabel {...props} color={color} />} />
+                  <LabelList dataKey={item.goods_no} content={(props: any) => <RankLabel {...props} color={color} />} />
                 </Line>
               )
             })}
           </LineChart>
         </ResponsiveContainer>
-      )}
-
-      {allDates.length < 2 && (
+      ) : (
         <p className="text-xs text-text-tertiary py-4 text-center">
-          내일부터 추이 그래프가 표시됩니다
+          {selected.size === 0 ? '상품을 선택하세요' : '내일부터 추이 그래프가 표시됩니다'}
         </p>
       )}
     </div>
