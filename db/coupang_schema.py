@@ -78,6 +78,17 @@ def init_db(conn=None):
             """)
             cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cp_cat_uniq ON category_rankings(rank_date, rank_hour, category_name, rank_position)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_cp_cat_date ON category_rankings(rank_date DESC)")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS insight_history (
+                    id           SERIAL PRIMARY KEY,
+                    product_id   TEXT,
+                    product_name TEXT,
+                    review_count INT,
+                    content      TEXT NOT NULL,
+                    created_at   TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_cp_insight_created ON insight_history(created_at DESC)")
 
     if conn is not None:
         _run(conn)

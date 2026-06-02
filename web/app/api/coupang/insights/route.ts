@@ -29,14 +29,35 @@ const SYSTEM = `당신은 K-뷰티 브랜드 전략 전문가입니다. 셀퓨�
 · 셀퓨전씨 제품팀이 내일 당장 실행할 수 있는 제안 포함
 · 각 섹션 3~4개 항목`
 
+async function saveInsight(
+  productId: string,
+  productName: string,
+  reviewCount: number,
+  content: string,
+) {
+  const client = await pool.connect()
+  try {
+    await client.query(
+      `INSERT INTO insight_history (product_id, product_name, review_count, content)
+       VALUES ($1, $2, $3, $4)`,
+      [productId || null, productName || null, reviewCount, content],
+    )
+  } catch (e) {
+    console.error('insight save failed:', e)
+  } finally {
+    client.release()
+  }
+}
+
 export async function GET(req: NextRequest) {
   const productId = req.nextUrl.searchParams.get('productId') ?? ''
 
   const dbClient = await pool.connect()
   let reviews: { rating: number; content: string; product_name: string }[] = []
+  let productName = ''
   try {
-    const cond = productId ? 'AND r.product_id = $1' : ''
-    const params: string[] = productId ? [productId] : []
+    const cond   = productId ? 'AND r.product_id = $1' : ''
+    const params = productId ? [productId] : []
 
     const { rows } = await dbClient.query(`
       (SELECT r.rating, SUBSTRING(r.content, 1, 200) AS content,
@@ -62,6 +83,7 @@ export async function GET(req: NextRequest) {
     `, params)
 
     reviews = rows
+    productName = rows[0]?.product_name ?? ''
   } finally {
     dbClient.release()
   }
@@ -74,9 +96,8 @@ export async function GET(req: NextRequest) {
     .map(r => `[★${r.rating}] ${r.product_name ? r.product_name + ' — ' : ''}${r.content}`)
     .join('\n')
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-  const stream = await openai.chat.completions.create({
+  const openai  = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  const stream  = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     stream: true,
     max_tokens: 1000,
@@ -87,16 +108,23 @@ export async function GET(req: NextRequest) {
     ],
   })
 
-  const encoder = new TextEncoder()
+  const encoder  = new TextEncoder()
+  let   fullText = ''
+
   const readable = new ReadableStream({
     async start(controller) {
       try {
         for await (const chunk of stream) {
           const text = chunk.choices[0]?.delta?.content ?? ''
-          if (text) controller.enqueue(encoder.encode(text))
+          if (text) {
+            fullText += text
+            controller.enqueue(encoder.encode(text))
+          }
         }
       } finally {
         controller.close()
+        // save after stream complete (fire & forget)
+        saveInsight(productId, productName, reviews.length, fullText).catch(() => {})
       }
     },
     cancel() {

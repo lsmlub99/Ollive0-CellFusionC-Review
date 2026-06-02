@@ -290,24 +290,68 @@ function parseInsightSections(text: string): Array<{ name: string; items: string
   return result
 }
 
+interface InsightHistoryEntry {
+  id: number
+  product_id: string | null
+  product_name: string | null
+  review_count: number
+  content: string
+  created_at: string
+}
+
+function InsightSections({ text }: { text: string }) {
+  const sections = parseInsightSections(text)
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {sections.map(({ name, items }) => {
+        const cfg = INSIGHT_SECTIONS[name]
+        return (
+          <div key={name}
+               className={`bg-surface border border-border border-t-2 rounded-lg p-4 ${cfg?.topBorder ?? 'border-t-border'}`}>
+            <p className={`text-xs font-semibold mb-3 flex items-center gap-1.5 ${cfg?.header ?? 'text-text-secondary'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full inline-block ${cfg?.dot ?? 'bg-text-tertiary'}`} />
+              {name}
+            </p>
+            <ul className="space-y-1.5">
+              {items.map((item, i) => (
+                <li key={i} className="text-xs text-text-primary leading-relaxed flex items-start gap-1.5">
+                  <span className="text-text-tertiary shrink-0 mt-0.5">·</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function CoupangInsightPanel({ productId }: { productId: string }) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done'>('idle')
-  const [text, setText]     = useState('')
+  const [status, setStatus]         = useState<'idle' | 'loading' | 'done'>('idle')
+  const [text, setText]             = useState('')
+  const [showHistory, setShowHist]  = useState(false)
+  const [history, setHistory]       = useState<InsightHistoryEntry[]>([])
+  const [histLoading, setHLoading]  = useState(false)
+  const [expandedId, setExpanded]   = useState<number | null>(null)
 
   useEffect(() => {
     setStatus('idle')
     setText('')
+    setShowHist(false)
+    setHistory([])
+    setExpanded(null)
   }, [productId])
 
   async function run() {
     setStatus('loading')
     setText('')
-    const params = productId ? `?productId=${productId}` : ''
+    const qs = productId ? `?productId=${productId}` : ''
     try {
-      const res    = await fetch(`/api/coupang/insights${params}`)
+      const res    = await fetch(`/api/coupang/insights${qs}`)
       const reader = res.body!.getReader()
       const dec    = new TextDecoder()
-      let buf      = ''
+      let   buf    = ''
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -315,39 +359,76 @@ function CoupangInsightPanel({ productId }: { productId: string }) {
         setText(buf)
       }
       setStatus('done')
+      // refresh history after new analysis
+      if (showHistory) loadHistory()
     } catch {
       setStatus('idle')
     }
   }
 
+  async function loadHistory() {
+    setHLoading(true)
+    const qs = productId ? `?productId=${productId}` : ''
+    try {
+      const res  = await fetch(`/api/coupang/insights/history${qs}`)
+      const data = await res.json()
+      setHistory(Array.isArray(data) ? data : [])
+    } finally {
+      setHLoading(false)
+    }
+  }
+
+  function toggleHistory() {
+    if (!showHistory && history.length === 0) loadHistory()
+    setShowHist(v => !v)
+  }
+
   const sections = parseInsightSections(text)
 
+  // ── idle ──
   if (status === 'idle') {
     return (
-      <div className="border border-dashed border-accent/30 rounded-lg px-5 py-6 mb-6 text-center bg-accent-bg/30">
-        <p className="text-sm font-semibold text-text-primary mb-1">AI 리뷰 분석</p>
-        <p className="text-xs text-text-secondary mb-4">
-          K-뷰티 전문가 시각으로 {productId ? '선택 상품' : '전체 브랜드'} 리뷰를 분석합니다
-        </p>
-        <button
-          onClick={run}
-          className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-accent text-white
-                     text-sm font-semibold hover:bg-accent/90 transition-colors duration-150"
-        >
-          인사이트 분석 시작
-        </button>
+      <div className="border border-dashed border-accent/30 rounded-lg px-5 py-6 mb-6 bg-accent-bg/30">
+        <div className="text-center">
+          <p className="text-sm font-semibold text-text-primary mb-1">AI 리뷰 분석</p>
+          <p className="text-xs text-text-secondary mb-4">
+            K-뷰티 전문가 시각으로 {productId ? '선택 상품' : '전체 브랜드'} 리뷰를 분석합니다
+          </p>
+          <button
+            onClick={run}
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-accent text-white
+                       text-sm font-semibold hover:bg-accent/90 transition-colors duration-150"
+          >
+            인사이트 분석 시작
+          </button>
+        </div>
+        <div className="mt-4 pt-4 border-t border-accent/20 flex justify-center">
+          <button onClick={toggleHistory}
+                  className="text-xs text-text-tertiary hover:text-text-secondary transition-colors">
+            {showHistory ? '이력 숨기기 ▲' : '이전 분석 이력 보기 ▼'}
+          </button>
+        </div>
+        {showHistory && (
+          <HistoryList
+            entries={history}
+            loading={histLoading}
+            expandedId={expandedId}
+            onToggle={id => setExpanded(v => v === id ? null : id)}
+          />
+        )}
       </div>
     )
   }
 
+  // ── loading (no sections yet) ──
   if (status === 'loading' && sections.length === 0) {
     return (
       <div className="border border-border rounded-lg px-5 py-6 mb-6">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-3">
           <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
           <p className="text-sm font-semibold text-text-primary">분석 중...</p>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {text.split('\n').filter(l => l.trim()).map((line, i) => (
             <p key={i} className="text-xs text-text-secondary leading-relaxed">{line}</p>
           ))}
@@ -356,6 +437,7 @@ function CoupangInsightPanel({ productId }: { productId: string }) {
     )
   }
 
+  // ── loading (sections streaming in) or done ──
   return (
     <div className="mb-6 space-y-3">
       <div className="flex items-center justify-between">
@@ -364,41 +446,88 @@ function CoupangInsightPanel({ productId }: { productId: string }) {
           {status === 'loading' && (
             <div className="w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
           )}
+          {status === 'done' && (
+            <span className="text-[11px] text-text-tertiary">저장됨</span>
+          )}
         </div>
         {status === 'done' && (
-          <button
-            onClick={run}
-            className="text-xs text-text-tertiary hover:text-text-secondary transition-colors"
-          >
+          <button onClick={run}
+                  className="text-xs text-text-tertiary hover:text-text-secondary transition-colors">
             재분석
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {sections.map(({ name, items }) => {
-          const cfg = INSIGHT_SECTIONS[name]
-          return (
-            <div
-              key={name}
-              className={`bg-surface border border-border border-t-2 rounded-lg p-4 ${cfg?.topBorder ?? 'border-t-border'}`}
-            >
-              <p className={`text-xs font-semibold mb-3 flex items-center gap-1.5 ${cfg?.header ?? 'text-text-secondary'}`}>
-                <span className={`w-1.5 h-1.5 rounded-full inline-block ${cfg?.dot ?? 'bg-text-tertiary'}`} />
-                {name}
-              </p>
-              <ul className="space-y-1.5">
-                {items.map((item, i) => (
-                  <li key={i} className="text-xs text-text-primary leading-relaxed flex items-start gap-1.5">
-                    <span className="text-text-tertiary shrink-0 mt-0.5">·</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )
-        })}
+      <InsightSections text={text} />
+
+      {status === 'done' && (
+        <div className="pt-1">
+          <button onClick={toggleHistory}
+                  className="text-xs text-text-tertiary hover:text-text-secondary transition-colors">
+            {showHistory ? '이력 숨기기 ▲' : '이전 분석 이력 보기 ▼'}
+          </button>
+          {showHistory && (
+            <HistoryList
+              entries={history}
+              loading={histLoading}
+              expandedId={expandedId}
+              onToggle={id => setExpanded(v => v === id ? null : id)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HistoryList({
+  entries, loading, expandedId, onToggle,
+}: {
+  entries: InsightHistoryEntry[]
+  loading: boolean
+  expandedId: number | null
+  onToggle: (id: number) => void
+}) {
+  if (loading) {
+    return (
+      <div className="mt-3 flex items-center gap-2 text-xs text-text-tertiary">
+        <div className="w-3 h-3 border-2 border-accent/50 border-t-transparent rounded-full animate-spin" />
+        불러오는 중...
       </div>
+    )
+  }
+  if (entries.length === 0) {
+    return <p className="mt-3 text-xs text-text-tertiary">저장된 이력이 없습니다</p>
+  }
+  return (
+    <div className="mt-3 space-y-2">
+      {entries.map(e => (
+        <div key={e.id} className="border border-border rounded-lg bg-surface overflow-hidden">
+          <button
+            onClick={() => onToggle(e.id)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-xs text-text-tertiary shrink-0">{e.created_at}</span>
+              <span className="text-xs text-text-secondary truncate">
+                {e.product_name
+                  ? e.product_name.replace(/^셀퓨전씨\s*/i, '').slice(0, 30)
+                  : '전체 브랜드'}
+              </span>
+              <span className="text-[11px] text-text-tertiary shrink-0">리뷰 {e.review_count}개</span>
+            </div>
+            <ChevronDown
+              size={13}
+              className={`text-text-tertiary shrink-0 transition-transform duration-200 ${expandedId === e.id ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {expandedId === e.id && (
+            <div className="border-t border-border px-4 py-3">
+              <InsightSections text={e.content} />
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
