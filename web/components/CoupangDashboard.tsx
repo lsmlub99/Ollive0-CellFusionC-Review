@@ -257,6 +257,152 @@ function SearchKeywordPanel({ keyword, items }: { keyword: string; items: Search
   )
 }
 
+// ─── InsightPanel ──────────────────────────────────────────────────────────────
+
+const INSIGHT_SECTIONS: Record<string, { dot: string; header: string; topBorder: string }> = {
+  '핵심 칭찬 포인트':       { dot: 'bg-emerald-500', header: 'text-emerald-700', topBorder: 'border-t-emerald-200' },
+  '아쉬운 점 & 개선 기회': { dot: 'bg-orange-400',  header: 'text-orange-700',  topBorder: 'border-t-orange-200'  },
+  '소비자 특성':            { dot: 'bg-blue-400',    header: 'text-blue-700',    topBorder: 'border-t-blue-200'    },
+  '마케팅 인사이트':        { dot: 'bg-accent',      header: 'text-accent',      topBorder: 'border-t-accent/40'   },
+}
+
+function parseInsightSections(text: string): Array<{ name: string; items: string[] }> {
+  const sectionRegex = /\[([^\]]+)\]/g
+  const result: Array<{ name: string; items: string[] }> = []
+  let match: RegExpExecArray | null
+  let lastName = ''
+  let lastEnd  = 0
+
+  while ((match = sectionRegex.exec(text)) !== null) {
+    if (lastName) {
+      const body  = text.slice(lastEnd, match.index)
+      const items = body.split('\n').map(l => l.replace(/^·\s*/, '').trim()).filter(l => l.length > 3)
+      result.push({ name: lastName, items })
+    }
+    lastName = match[1]
+    lastEnd  = match.index + match[0].length
+  }
+  if (lastName) {
+    const body  = text.slice(lastEnd)
+    const items = body.split('\n').map(l => l.replace(/^·\s*/, '').trim()).filter(l => l.length > 3)
+    result.push({ name: lastName, items })
+  }
+  return result
+}
+
+function CoupangInsightPanel({ productId }: { productId: string }) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  const [text, setText]     = useState('')
+
+  useEffect(() => {
+    setStatus('idle')
+    setText('')
+  }, [productId])
+
+  async function run() {
+    setStatus('loading')
+    setText('')
+    const params = productId ? `?productId=${productId}` : ''
+    try {
+      const res    = await fetch(`/api/coupang/insights${params}`)
+      const reader = res.body!.getReader()
+      const dec    = new TextDecoder()
+      let buf      = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        setText(buf)
+      }
+      setStatus('done')
+    } catch {
+      setStatus('idle')
+    }
+  }
+
+  const sections = parseInsightSections(text)
+
+  if (status === 'idle') {
+    return (
+      <div className="border border-dashed border-accent/30 rounded-lg px-5 py-6 mb-6 text-center bg-accent-bg/30">
+        <p className="text-sm font-semibold text-text-primary mb-1">AI 리뷰 분석</p>
+        <p className="text-xs text-text-secondary mb-4">
+          K-뷰티 전문가 시각으로 {productId ? '선택 상품' : '전체 브랜드'} 리뷰를 분석합니다
+        </p>
+        <button
+          onClick={run}
+          className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-accent text-white
+                     text-sm font-semibold hover:bg-accent/90 transition-colors duration-150"
+        >
+          인사이트 분석 시작
+        </button>
+      </div>
+    )
+  }
+
+  if (status === 'loading' && sections.length === 0) {
+    return (
+      <div className="border border-border rounded-lg px-5 py-6 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin shrink-0" />
+          <p className="text-sm font-semibold text-text-primary">분석 중...</p>
+        </div>
+        <div className="space-y-2">
+          {text.split('\n').filter(l => l.trim()).map((line, i) => (
+            <p key={i} className="text-xs text-text-secondary leading-relaxed">{line}</p>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-6 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-text-primary">AI 리뷰 분석</p>
+          {status === 'loading' && (
+            <div className="w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          )}
+        </div>
+        {status === 'done' && (
+          <button
+            onClick={run}
+            className="text-xs text-text-tertiary hover:text-text-secondary transition-colors"
+          >
+            재분석
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {sections.map(({ name, items }) => {
+          const cfg = INSIGHT_SECTIONS[name]
+          return (
+            <div
+              key={name}
+              className={`bg-surface border border-border border-t-2 rounded-lg p-4 ${cfg?.topBorder ?? 'border-t-border'}`}
+            >
+              <p className={`text-xs font-semibold mb-3 flex items-center gap-1.5 ${cfg?.header ?? 'text-text-secondary'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${cfg?.dot ?? 'bg-text-tertiary'}`} />
+                {name}
+              </p>
+              <ul className="space-y-1.5">
+                {items.map((item, i) => (
+                  <li key={i} className="text-xs text-text-primary leading-relaxed flex items-start gap-1.5">
+                    <span className="text-text-tertiary shrink-0 mt-0.5">·</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── ReviewCard ────────────────────────────────────────────────────────────────
 
 const PREVIEW_LEN = 120
@@ -547,6 +693,7 @@ export default function CoupangDashboard() {
         ══════════════════════════════════════ */}
         {active === 'reviews' && (
           <section>
+            <CoupangInsightPanel productId={selectedProduct} />
             <div className="mb-4">
               <select
                 value={selectedProduct}
