@@ -59,11 +59,18 @@ export default async function Page() {
 
   const productTopics = await safe(getProductTopicInsights, [])
 
-  const [marketInsight, reviewInsight, dailyBrief] = await Promise.all([
-    withTimeout(marketRankings.length > 0 ? generateMarketInsight(marketRankings) : Promise.resolve(''), 25000, ''),
-    withTimeout(generateReviewInsight(insights, negativeData), 25000, ''),
-    withTimeout(marketRankings.length > 0 ? generateDailyBrief(marketRankings, insights, negativeData) : Promise.resolve(''), 25000, ''),
-  ])
+  const marketInsight = await withTimeout(
+    marketRankings.length > 0 ? generateMarketInsight(marketRankings) : Promise.resolve(''),
+    25000, ''
+  )
+  const reviewInsight = await withTimeout(
+    generateReviewInsight(insights, negativeData),
+    25000, ''
+  )
+  const dailyBrief = await withTimeout(
+    marketRankings.length > 0 ? generateDailyBrief(marketRankings, insights, negativeData) : Promise.resolve(''),
+    25000, ''
+  )
 
   return (
     <div className="min-h-screen bg-background">

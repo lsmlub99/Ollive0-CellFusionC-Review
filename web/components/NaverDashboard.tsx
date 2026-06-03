@@ -32,10 +32,10 @@ interface NaverInsight { id: number; content: string; collected_at: string }
 // ─── 상수 ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
+  { id: 'insight', label: 'AI 인사이트' },
   { id: 'trends',  label: '검색 트렌드' },
   { id: 'ranks',   label: '검색 노출' },
   { id: 'market',  label: '시장 현황' },
-  { id: 'insight', label: 'AI 인사이트' },
 ] as const
 type TabId = typeof TABS[number]['id']
 
@@ -524,7 +524,7 @@ function InsightTab() {
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────────────────
 
 export default function NaverDashboard() {
-  const [active, setActive] = useState<TabId>('trends')
+  const [active, setActive] = useState<TabId>('insight')
 
   const [trends,     setTrends]     = useState<Record<string, TrendPoint[]> | null>(null)
   const [ranks,      setRanks]      = useState<SearchRanksData | null>(null)
@@ -581,6 +581,7 @@ export default function NaverDashboard() {
       </div>
 
       {/* 탭 콘텐츠 */}
+      {active === 'insight' && <InsightTab />}
       {active === 'trends' && (
         trendsLoad ? <Spinner /> : <TrendsTab data={trends ?? {}} />
       )}
@@ -590,7 +591,6 @@ export default function NaverDashboard() {
       {active === 'market' && (
         marketLoad ? <Spinner /> : <MarketTab items={market ?? []} />
       )}
-      {active === 'insight' && <InsightTab />}
     </div>
   )
 }

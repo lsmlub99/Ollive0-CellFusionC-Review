@@ -14,12 +14,12 @@ export default function KPIStrip({ stats }: KPIStripProps) {
         className="relative group/kpi sm:col-span-2 rounded-xl px-5 py-6 border overflow-hidden
                    transition-all duration-200 hover:shadow-card-hover"
         style={{
-          background: 'rgba(22,163,74,0.06)',
-          borderColor: 'rgba(22,163,74,0.25)',
-          boxShadow: '0 0 0 1px rgba(0,0,0,0.04), 0 2px 10px rgba(22,163,74,0.1)',
+          background: 'rgba(22,163,74,0.08)',
+          borderColor: 'rgba(22,163,74,0.35)',
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.04), 0 4px 16px rgba(22,163,74,0.15)',
         }}
       >
-        <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: '#16A34A', opacity: 0.5 }} />
+        <div className="absolute top-0 left-0 right-0 h-[4px]" style={{ backgroundColor: '#16A34A', opacity: 0.7 }} />
         <InfoTooltip text="전체 리뷰의 가중 평균 평점입니다." />
         <p className="text-xs text-text-secondary mb-2 font-medium">평균 평점</p>
         <p className="text-[4rem] md:text-[4.8rem] font-bold leading-none mb-2 [font-variant-numeric:tabular-nums]" style={{ color: '#16A34A' }}>
@@ -60,11 +60,11 @@ function KPICard({
   return (
     <div
       className="relative group/kpi bg-surface rounded-xl px-4 py-5 md:px-5 md:py-6
-                 border border-border text-center overflow-hidden
+                 border border-border/70 text-center overflow-hidden
                  transition-all duration-200 hover:shadow-card-hover"
-      style={{ boxShadow: `0 0 0 1px rgba(0,0,0,0.04), 0 2px 8px ${accentColor}` }}
+      style={{ boxShadow: `0 0 0 1px rgba(0,0,0,0.03), 0 2px 6px ${accentColor}` }}
     >
-      <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ backgroundColor: color, opacity: 0.35 }} />
+      <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ backgroundColor: color, opacity: 0.25 }} />
       <InfoTooltip text={tooltip} />
       <p className="text-xs text-text-secondary mb-3">{label}</p>
       <p className="text-[2rem] md:text-[2.4rem] font-bold leading-none mb-2 [font-variant-numeric:tabular-nums]" style={{ color }}>

@@ -22,7 +22,7 @@ export default function PlatformSelector({ value, onChange }: Props) {
           onClick={() => onChange(p.id)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
             value === p.id
-              ? 'bg-accent text-white shadow-sm'
+              ? 'bg-accent text-white shadow-sm ring-2 ring-accent/40 ring-offset-1'
               : 'text-text-secondary hover:text-text-primary hover:bg-background'
           }`}
         >

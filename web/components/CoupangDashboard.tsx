@@ -763,19 +763,22 @@ export default function CoupangDashboard() {
   const [showOursOnly, setShowOursOnly]         = useState(false)
   const [rankHistory, setRankHistory]           = useState<Record<string, RankHistoryEntry[]> | null>(null)
   const [rankHistoryLoading, setRHLoading]      = useState(false)
+  const [latestBriefing, setLatestBriefing]     = useState<InsightHistoryEntry | null>(null)
 
   useEffect(() => {
     Promise.all([
       fetch('/api/coupang/stats').then(r => r.ok ? r.json() : null),
       fetch('/api/coupang/rankings').then(r => r.ok ? r.json() : null),
       fetch('/api/coupang/products').then(r => r.ok ? r.json() : []),
-    ]).then(([s, r, p]) => {
+      fetch('/api/coupang/insights/history?limit=1').then(r => r.ok ? r.json() : []),
+    ]).then(([s, r, p, ins]) => {
       setStats(s)
       setRankings({
         search:   Array.isArray(r?.search)   ? r.search   : [],
         category: Array.isArray(r?.category) ? r.category : [],
       })
       setProducts(Array.isArray(p) ? p : [])
+      setLatestBriefing(Array.isArray(ins) && ins.length > 0 ? ins[0] : null)
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -870,12 +873,14 @@ export default function CoupangDashboard() {
           <p className="text-[3.5rem] font-bold leading-none mb-1" style={{ color: '#ea580c' }}>
             {stats?.avg_rating != null ? Number(stats.avg_rating).toFixed(1) : '-'}
           </p>
-          <p className="text-xs text-text-secondary/70">총 {(stats?.total_reviews ?? 0).toLocaleString()}개 리뷰</p>
+          <p className="text-xs text-text-secondary/70">★★★★★ 기준 5점</p>
         </div>
         <div className="rounded-xl px-4 py-5 border border-border bg-surface text-center">
-          <p className="text-xs text-text-secondary mb-3">수집 상품</p>
-          <p className="text-[2rem] font-bold leading-none mb-2 text-text-primary">{stats?.total_products ?? 0}</p>
-          <p className="text-xs text-text-secondary/70">개 상품</p>
+          <p className="text-xs text-text-secondary mb-3">누적 리뷰</p>
+          <p className="text-[2rem] font-bold leading-none mb-2 text-text-primary">
+            {(stats?.total_reviews ?? 0).toLocaleString()}
+          </p>
+          <p className="text-xs text-text-secondary/70">{stats?.total_products ?? 0}개 상품</p>
         </div>
         <div className="rounded-xl px-4 py-5 border border-border bg-surface text-center">
           <p className="text-xs text-text-secondary mb-3">카테고리 입점</p>
@@ -883,6 +888,11 @@ export default function CoupangDashboard() {
           <p className="text-xs text-text-secondary/70">개 카테고리</p>
         </div>
       </div>
+      {stats?.last_updated && (() => {
+        const d = new Date(stats.last_updated)
+        const ts = `${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+        return <p className="text-xs text-text-tertiary -mt-6 text-right">마지막 수집: {ts}</p>
+      })()}
 
       {/* ── 탭 바 ── */}
       <div className="border-b border-border sticky top-14 z-30 bg-background/95 backdrop-blur-sm">
@@ -910,6 +920,39 @@ export default function CoupangDashboard() {
         ══════════════════════════════════════ */}
         {active === 'today' && (
           <div className="space-y-6">
+
+            {/* AI 브리핑 카드 */}
+            {latestBriefing && (() => {
+              const sections = parseInsightSections(latestBriefing.content)
+              const first = sections[0]
+              if (!first) return null
+              const d = new Date(latestBriefing.created_at)
+              const ts = `${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+              return (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-orange-600 uppercase tracking-wide">AI 브리핑</span>
+                    <span className="text-[11px] text-gray-400">{ts}</span>
+                  </div>
+                  <p className="text-xs font-semibold text-orange-700 mb-1.5">{first.name}</p>
+                  <ul className="space-y-1">
+                    {first.items.slice(0, 3).map((item, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs text-gray-700 leading-relaxed">
+                        <span className="text-orange-400 shrink-0 mt-0.5">·</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => setActive('reviews')}
+                    className="mt-2.5 text-xs text-orange-500 hover:underline"
+                  >
+                    전체 리뷰 분석 보기 →
+                  </button>
+                </div>
+              )
+            })()}
+
             <div>
               <SectionDivider tag="시장 현황" />
               <div className="flex items-center gap-2">

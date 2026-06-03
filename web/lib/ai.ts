@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { MarketCategoryData, Insights, ProductNegativeData } from './types'
 import { pool } from './db'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 })
 
 const NO_MARKDOWN_SYSTEM = '당신은 올리브영 뷰티 시장 전문 분석가입니다. 출력 규칙: 1) 모든 줄은 반드시 "- "로 시작하세요. 2) 마크다운 서식 금지(#, ##, **, __, >, `, ~, 이모지 등). 3) 데이터 재나열 금지 — 해석과 판단만 써라. 4) 각 bullet은 마케터가 즉시 행동할 수 있는 하나의 전략적 결론을 담아야 한다. 5) bullet 사이 빈 줄 없이 연속 작성.'
 

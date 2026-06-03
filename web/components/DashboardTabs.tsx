@@ -46,6 +46,16 @@ interface Props {
   productTopics: ProductTopicData[]
 }
 
+function renderBold(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  if (parts.length === 1) return text
+  return parts.map((p, i) =>
+    p.startsWith('**') && p.endsWith('**')
+      ? <strong key={i} className="font-semibold text-accent-fg">{p.slice(2, -2)}</strong>
+      : p
+  )
+}
+
 const TABS = [
   { id: 'today',      label: '오늘 현황' },
   { id: 'reviews',    label: '리뷰 분석' },
@@ -105,12 +115,12 @@ export default function DashboardTabs({
                     <ul className="space-y-2">
                       {dailyBrief
                         .split('\n')
-                        .map(l => l.replace(/^\[.*?\]\s*/, '').replace(/^#+\s*/, '').replace(/\*\*/g, '').replace(/^[\s\-·•*\d.]+/, '').trim())
+                        .map(l => l.replace(/^\[.*?\]\s*/, '').replace(/^#+\s*/, '').replace(/^[\s\-·•*\d.]+/, '').trim())
                         .filter(l => l.length > 10)
                         .map((msg, i) => (
                           <li key={i} className="text-sm text-accent-fg flex items-start gap-2">
                             <span className="text-accent shrink-0 mt-0.5 font-bold text-base leading-none">·</span>
-                            <span className="leading-snug">{msg}</span>
+                            <span className="leading-snug">{renderBold(msg)}</span>
                           </li>
                         ))}
                     </ul>
@@ -214,12 +224,12 @@ export default function DashboardTabs({
                 <ul className="space-y-1.5">
                   {reviewInsight
                     .split('\n')
-                    .map(l => l.replace(/^\[.*?\]\s*/, '').replace(/^#+\s*/, '').replace(/\*\*/g, '').replace(/^[\s\-·•*\d.]+/, '').trim())
+                    .map(l => l.replace(/^\[.*?\]\s*/, '').replace(/^#+\s*/, '').replace(/^[\s\-·•*\d.]+/, '').trim())
                     .filter(l => l.length > 10)
                     .map((msg, i) => (
                       <li key={i} className="text-sm text-accent-fg flex items-start gap-1.5">
                         <span className="text-accent shrink-0 mt-0.5 font-bold">·</span>
-                        <span className="leading-snug">{msg}</span>
+                        <span className="leading-snug">{renderBold(msg)}</span>
                       </li>
                     ))}
                 </ul>
