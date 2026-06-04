@@ -33,8 +33,8 @@ export default function OlivepickMonthAccordion({ month, defaultOpen = false, on
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ month: month.month, products: month.products }),
       })
-      if (!res.ok) throw new Error()
       const data = await res.json()
+      if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`)
       const newInsight: PromoMonthlyInsight = {
         month: month.month,
         concept_tags: data.concept_tags,

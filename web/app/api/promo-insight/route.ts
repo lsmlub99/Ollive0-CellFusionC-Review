@@ -31,8 +31,9 @@ export async function POST(req: NextRequest) {
     await savePromoMonthlyInsight(month, result.concept_tags, result.summary, result.action_points)
     return NextResponse.json(result)
   } catch (e) {
-    console.error(e)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[promo-insight POST]', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
 
