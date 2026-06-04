@@ -16,6 +16,8 @@ interface CoupangStats {
   total_products: number
   avg_rating: number
   last_updated: string | null
+  new_reviews_7d: number
+  negative_ratio: number
 }
 
 interface CoupangProduct {
@@ -480,6 +482,13 @@ const INSIGHT_SECTIONS: Record<string, { dot: string; header: string; topBorder:
   '마케팅 인사이트':        { dot: 'bg-accent',      header: 'text-accent',      topBorder: 'border-t-accent/40'   },
 }
 
+const INSIGHT_URGENCY: Record<string, { label: string; cls: string }> = {
+  '핵심 칭찬 포인트':       { label: '현황',     cls: 'bg-emerald-100 text-emerald-700' },
+  '아쉬운 점 & 개선 기회': { label: '즉시 조치', cls: 'bg-red-100 text-red-700' },
+  '소비자 특성':            { label: '현황',     cls: 'bg-blue-100 text-blue-700' },
+  '마케팅 인사이트':        { label: '모니터링', cls: 'bg-yellow-100 text-yellow-700' },
+}
+
 function parseInsightSections(text: string): Array<{ name: string; items: string[] }> {
   const sectionRegex = /\[([^\]]+)\]/g
   const result: Array<{ name: string; items: string[] }> = []
@@ -522,10 +531,15 @@ function InsightSections({ text }: { text: string }) {
         return (
           <div key={name}
                className={`bg-surface border border-border border-t-2 rounded-lg p-4 ${cfg?.topBorder ?? 'border-t-border'}`}>
-            <p className={`text-xs font-semibold mb-3 flex items-center gap-1.5 ${cfg?.header ?? 'text-text-secondary'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full inline-block ${cfg?.dot ?? 'bg-text-tertiary'}`} />
-              {name}
-            </p>
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg?.dot ?? 'bg-text-tertiary'}`} />
+              <p className={`text-xs font-semibold ${cfg?.header ?? 'text-text-secondary'}`}>{name}</p>
+              {INSIGHT_URGENCY[name] && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${INSIGHT_URGENCY[name].cls}`}>
+                  {INSIGHT_URGENCY[name].label}
+                </span>
+              )}
+            </div>
             <ul className="space-y-1.5">
               {items.map((item, i) => (
                 <li key={i} className="text-xs text-text-primary leading-relaxed flex items-start gap-1.5">
@@ -866,8 +880,8 @@ export default function CoupangDashboard() {
     <div className="space-y-8">
 
       {/* ── KPI ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="sm:col-span-2 rounded-xl px-5 py-6 border"
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="col-span-2 sm:col-span-1 rounded-xl px-5 py-6 border"
              style={{ background: 'rgba(234,88,12,0.06)', borderColor: 'rgba(234,88,12,0.25)' }}>
           <p className="text-xs text-text-secondary mb-2 font-medium">평균 평점</p>
           <p className="text-[3.5rem] font-bold leading-none mb-1" style={{ color: '#ea580c' }}>
@@ -886,6 +900,28 @@ export default function CoupangDashboard() {
           <p className="text-xs text-text-secondary mb-3">카테고리 입점</p>
           <p className="text-[2rem] font-bold leading-none mb-2 text-text-primary">{Object.keys(catGroups).length}</p>
           <p className="text-xs text-text-secondary/70">개 카테고리</p>
+        </div>
+        <div className="rounded-xl px-4 py-5 border border-border bg-surface text-center">
+          <p className="text-xs text-text-secondary mb-3">7일 신규 리뷰</p>
+          <p className="text-[2rem] font-bold leading-none mb-2 text-text-primary">
+            {(stats?.new_reviews_7d ?? 0).toLocaleString()}
+          </p>
+          <p className="text-xs text-text-secondary/70">최근 7일</p>
+        </div>
+        <div className={`rounded-xl px-4 py-5 border text-center ${
+          (stats?.negative_ratio ?? 0) >= 15
+            ? 'border-red-300 bg-red-50'
+            : 'border-border bg-surface'
+        }`}>
+          <p className="text-xs text-text-secondary mb-3">부정 리뷰 비율</p>
+          <p className={`text-[2rem] font-bold leading-none mb-2 ${
+            (stats?.negative_ratio ?? 0) >= 15 ? 'text-red-600' : 'text-text-primary'
+          }`}>
+            {stats?.negative_ratio != null ? `${Number(stats.negative_ratio).toFixed(1)}%` : '-'}
+          </p>
+          <p className="text-xs text-text-secondary/70">
+            {(stats?.negative_ratio ?? 0) >= 15 ? '⚠ 주의' : '3점 이하'}
+          </p>
         </div>
       </div>
       {stats?.last_updated && (() => {

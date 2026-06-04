@@ -48,6 +48,13 @@ const INSIGHT_SECTIONS: Record<string, { dot: string; header: string; topBorder:
   '액션 제안':      { dot: 'bg-accent',      header: 'text-accent',      topBorder: 'border-t-accent/40' },
 }
 
+const INSIGHT_URGENCY: Record<string, { label: string; cls: string }> = {
+  '액션 제안':     { label: '즉시 조치', cls: 'bg-red-100 text-red-700' },
+  '트렌드 시그널': { label: '모니터링',  cls: 'bg-yellow-100 text-yellow-700' },
+  '검색 노출 현황':{ label: '현황',     cls: 'bg-emerald-100 text-emerald-700' },
+  '경쟁사 시장':   { label: '모니터링', cls: 'bg-yellow-100 text-yellow-700' },
+}
+
 // ─── 헬퍼 ──────────────────────────────────────────────────────────────────────
 
 function parseInsightSections(text: string) {
@@ -178,6 +185,16 @@ function SearchRanksTab({ data }: { data: SearchRanksData }) {
   const activeCatKey = activeCat || catKeywords[0] || ''
   const catItems = category.filter(i => i.keyword === activeCatKey)
 
+  // 매트릭스: 자사 상품 × 키워드
+  const matrixMap = new Map<string, SearchRankItem>()
+  for (const item of category.filter(i => i.is_ours)) {
+    const key = `${item.product_title}||${item.keyword}`
+    const existing = matrixMap.get(key)
+    if (!existing || item.rank_position < existing.rank_position) matrixMap.set(key, item)
+  }
+  const matrixKeywords = catKeywords
+  const matrixProducts = [...new Set(category.filter(i => i.is_ours).map(i => i.product_title))]
+
   if (category.length === 0 && brand.length === 0) return (
     <div className="border border-dashed border-border rounded-lg px-6 py-12 text-center">
       <p className="text-sm text-text-secondary">검색 노출 데이터가 없어요</p>
@@ -203,6 +220,56 @@ function SearchRanksTab({ data }: { data: SearchRanksData }) {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* 자사 노출 매트릭스 */}
+            {matrixProducts.length > 0 && matrixKeywords.length > 0 && (
+              <div className="border border-border rounded-lg bg-surface overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-text-primary">자사 노출 매트릭스</p>
+                  <p className="text-xs text-text-tertiary">키워드별 자사 상품 순위</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs min-w-max">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="px-4 py-2 text-left text-text-tertiary font-medium min-w-[140px]">상품</th>
+                        {matrixKeywords.map(kw => (
+                          <th key={kw} className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">{kw}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {matrixProducts.map(product => (
+                        <tr key={product} className="hover:bg-muted/20">
+                          <td className="px-4 py-2.5 text-text-primary font-medium truncate max-w-[180px]">
+                            <span title={product}>{product.length > 17 ? product.slice(0, 17) + '…' : product}</span>
+                          </td>
+                          {matrixKeywords.map(kw => {
+                            const item = matrixMap.get(`${product}||${kw}`)
+                            return (
+                              <td key={kw} className="px-3 py-2.5 text-center">
+                                {item ? (
+                                  <div className="flex flex-col items-center leading-tight">
+                                    <span className="font-bold text-accent">{item.rank_position}위</span>
+                                    {item.delta !== null && item.delta !== 0 && (
+                                      <span className={`text-[10px] ${item.delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                        {item.delta > 0 ? `▲${item.delta}` : `▼${Math.abs(item.delta)}`}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-text-tertiary/50">—</span>
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* 키워드 탭 */}
             <div className="flex gap-1.5 flex-wrap">
               {catKeywords.map(kw => (
@@ -440,6 +507,11 @@ function InsightSections({ text }: { text: string }) {
             <div className="flex items-center gap-2 mb-2.5">
               <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
               <p className={`text-xs font-bold ${style.header}`}>{sec.name}</p>
+              {INSIGHT_URGENCY[sec.name] && (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${INSIGHT_URGENCY[sec.name].cls}`}>
+                  {INSIGHT_URGENCY[sec.name].label}
+                </span>
+              )}
             </div>
             <ul className="space-y-1.5">
               {sec.items.map((item, i) => (
@@ -489,12 +561,21 @@ function InsightTab() {
     </div>
   )
 
+  const sections = parseInsightSections(latest.content)
+  const actionItems = sections.find(s => s.name === '액션 제안')?.items ?? []
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-text-primary">AI 네이버 쇼핑 분석</p>
         <span className="text-[11px] text-text-tertiary">{latest.collected_at}</span>
       </div>
+      {actionItems.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+          <p className="text-[10px] font-bold text-red-600 mb-1">🔴 이번 주 핵심 액션</p>
+          <p className="text-sm text-red-800">{actionItems[0]}</p>
+        </div>
+      )}
       <InsightSections text={latest.content} />
       {history.length > 0 && (
         <div className="pt-1 border-t border-border mt-3">
@@ -530,27 +611,28 @@ export default function NaverDashboard() {
   const [ranks,      setRanks]      = useState<SearchRanksData | null>(null)
   const [market,     setMarket]     = useState<MarketItem[] | null>(null)
   const [trendsLoad, setTrendsLoad] = useState(false)
-  const [ranksLoad,  setRanksLoad]  = useState(false)
+  const [ranksLoad,  setRanksLoad]  = useState(true)
   const [marketLoad, setMarketLoad] = useState(false)
+
+  // 검색 노출 데이터는 KPI 헤더를 위해 마운트 시 선로딩
+  useEffect(() => {
+    fetch('/api/naver/search-ranks')
+      .then(r => r.json())
+      .then(data => setRanks(data && typeof data === 'object' ? data : { category: [], brand: [] }))
+      .catch(() => setRanks({ category: [], brand: [] }))
+      .finally(() => setRanksLoad(false))
+  }, [])
 
   useEffect(() => {
     if (active === 'trends' && trends === null && !trendsLoad) {
       setTrendsLoad(true)
       fetch('/api/naver/trends').then(r => r.json()).then(setTrends).catch(() => setTrends({})).finally(() => setTrendsLoad(false))
     }
-    if (active === 'ranks' && ranks === null && !ranksLoad) {
-      setRanksLoad(true)
-      fetch('/api/naver/search-ranks')
-        .then(r => r.json())
-        .then(data => setRanks(data && typeof data === 'object' ? data : { category: [], brand: [] }))
-        .catch(() => setRanks({ category: [], brand: [] }))
-        .finally(() => setRanksLoad(false))
-    }
     if (active === 'market' && market === null && !marketLoad) {
       setMarketLoad(true)
       fetch('/api/naver/market').then(r => r.json()).then(setMarket).catch(() => setMarket([])).finally(() => setMarketLoad(false))
     }
-  }, [active, trends, ranks, market, trendsLoad, ranksLoad, marketLoad])
+  }, [active, trends, market, trendsLoad, marketLoad])
 
   function Spinner() {
     return (
@@ -561,8 +643,35 @@ export default function NaverDashboard() {
     )
   }
 
+  const ourItems = ranks?.category.filter(r => r.is_ours) ?? []
+  const kpiExposedKeywords  = new Set(ourItems.map(r => r.keyword)).size
+  const kpiBestRank         = ourItems.length > 0 ? Math.min(...ourItems.map(r => r.rank_position)) : null
+  const kpiExposedProducts  = new Set(ourItems.map(r => r.product_title)).size
+
   return (
     <div className="space-y-6">
+
+      {/* ── KPI 헤더 ── */}
+      <div className="grid grid-cols-3 gap-3">
+        {(['노출 키워드', '최고 순위', '노출 상품'] as const).map((label, i) => {
+          const values = [
+            kpiExposedKeywords > 0 ? `${kpiExposedKeywords}개` : '—',
+            kpiBestRank !== null   ? `${kpiBestRank}위`         : '—',
+            kpiExposedProducts > 0 ? `${kpiExposedProducts}개`  : '—',
+          ]
+          return (
+            <div key={label} className="rounded-lg border border-border bg-surface px-4 py-3 text-center">
+              <p className="text-[11px] text-text-tertiary mb-1">{label}</p>
+              {ranksLoad ? (
+                <div className="h-7 w-14 mx-auto bg-muted animate-pulse rounded mt-1" />
+              ) : (
+                <p className={`text-2xl font-bold ${i === 1 ? 'text-accent' : 'text-text-primary'}`}>{values[i]}</p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
       {/* 탭 바 */}
       <div className="flex gap-0.5 p-0.5 bg-muted rounded-lg border border-border w-fit">
         {TABS.map(tab => (
