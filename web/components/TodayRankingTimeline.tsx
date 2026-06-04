@@ -43,7 +43,7 @@ function SparkLine({
   return (
     <div className="flex items-center gap-3 flex-1 min-w-0">
       {/* 스파크라인 */}
-      <div className="flex-1 min-w-[80px] max-w-[200px]">
+      <div className="flex-1 min-w-[80px]">
         <ResponsiveContainer width="100%" height={48}>
           <LineChart data={chartData} margin={{ top: 6, right: 4, left: 0, bottom: 6 }}>
             <YAxis domain={['dataMax + 2', 'dataMin - 2']} hide reversed />
