@@ -178,22 +178,36 @@ function TrendsTab({ data }: { data: Record<string, TrendPoint[]> }) {
 
 function SearchRanksTab({ data }: { data: SearchRanksData }) {
   const { category, brand } = data
-  const catKeywords = [...new Set(category.map(i => i.keyword))]
+  const allKeywords = [...new Set(category.map(i => i.keyword))]
+
+  // 브랜드 키워드 제외: 결과의 80% 이상이 자사면 브랜드 검색어
+  const competitiveKeywords = allKeywords.filter(kw => {
+    const kwItems = category.filter(i => i.keyword === kw)
+    if (kwItems.length === 0) return false
+    return kwItems.filter(i => i.is_ours).length / kwItems.length <= 0.8
+  })
+
   const [activeCat, setActiveCat] = useState('')
   const [expandedBrand, setExpandedBrand] = useState<string | null>(null)
 
-  const activeCatKey = activeCat || catKeywords[0] || ''
-  const catItems = category.filter(i => i.keyword === activeCatKey)
+  const activeCatKey = activeCat || competitiveKeywords[0] || ''
+  const catItems = category
+    .filter(i => i.keyword === activeCatKey && i.product_title?.trim())
 
-  // 매트릭스: 자사 상품 × 키워드
+  // 경쟁 키워드 노출 현황
+  const exposedKws   = competitiveKeywords.filter(kw => category.some(i => i.keyword === kw && i.is_ours))
+  const unexposedKws = competitiveKeywords.filter(kw => !category.some(i => i.keyword === kw && i.is_ours))
+
+  // 매트릭스: 자사 상품 × 경쟁 키워드
   const matrixMap = new Map<string, SearchRankItem>()
-  for (const item of category.filter(i => i.is_ours)) {
+  for (const item of category.filter(i => i.is_ours && competitiveKeywords.includes(i.keyword))) {
     const key = `${item.product_title}||${item.keyword}`
     const existing = matrixMap.get(key)
     if (!existing || item.rank_position < existing.rank_position) matrixMap.set(key, item)
   }
-  const matrixKeywords = catKeywords
-  const matrixProducts = [...new Set(category.filter(i => i.is_ours).map(i => i.product_title))]
+  const matrixProducts = [...new Set(
+    category.filter(i => i.is_ours && competitiveKeywords.includes(i.keyword)).map(i => i.product_title)
+  )]
 
   if (category.length === 0 && brand.length === 0) return (
     <div className="border border-dashed border-border rounded-lg px-6 py-12 text-center">
@@ -213,40 +227,67 @@ function SearchRanksTab({ data }: { data: SearchRanksData }) {
           <span className="text-xs text-text-tertiary">일반 검색어 기준 · 자사 위치 강조</span>
         </div>
 
-        {catKeywords.length === 0 ? (
+        {competitiveKeywords.length === 0 ? (
           <div className="border border-dashed border-border rounded-lg px-5 py-6 bg-surface/50">
             <p className="text-sm text-text-secondary text-center">다음 수집부터 카테고리 경쟁 순위가 표시됩니다</p>
             <p className="text-xs text-text-tertiary text-center mt-1">"선크림", "선세럼" 등 일반 검색어 결과에서 자사 노출 위치를 추적합니다</p>
           </div>
         ) : (
           <div className="space-y-3">
+
+            {/* 노출 현황 요약 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-text-tertiary">경쟁 키워드 {competitiveKeywords.length}개 중</span>
+              {exposedKws.length > 0 && (
+                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  노출 {exposedKws.length}개: {exposedKws.join(', ')}
+                </span>
+              )}
+              {unexposedKws.length > 0 && (
+                <span className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                  미노출 {unexposedKws.length}개: {unexposedKws.join(', ')}
+                </span>
+              )}
+            </div>
+
             {/* 자사 노출 매트릭스 */}
-            {matrixProducts.length > 0 && matrixKeywords.length > 0 && (
+            {competitiveKeywords.length > 0 && (
               <div className="border border-border rounded-lg bg-surface overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between">
                   <p className="text-sm font-semibold text-text-primary">자사 노출 매트릭스</p>
-                  <p className="text-xs text-text-tertiary">키워드별 자사 상품 순위</p>
+                  <p className="text-xs text-text-tertiary">경쟁 키워드 기준</p>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs min-w-max">
                     <thead>
                       <tr className="border-b border-border">
                         <th className="px-4 py-2 text-left text-text-tertiary font-medium min-w-[140px]">상품</th>
-                        {matrixKeywords.map(kw => (
-                          <th key={kw} className="px-3 py-2 text-center text-text-secondary font-medium whitespace-nowrap">{kw}</th>
+                        {competitiveKeywords.map(kw => (
+                          <th key={kw} className={`px-3 py-2 text-center font-medium whitespace-nowrap ${
+                            unexposedKws.includes(kw) ? 'text-red-400' : 'text-text-secondary'
+                          }`}>
+                            {kw}
+                            {unexposedKws.includes(kw) && <span className="block text-[10px] text-red-400 font-normal">미노출</span>}
+                          </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {matrixProducts.map(product => (
+                      {matrixProducts.length === 0 ? (
+                        <tr>
+                          <td colSpan={competitiveKeywords.length + 1} className="px-4 py-6 text-center text-xs text-text-tertiary">
+                            경쟁 키워드에서 자사 상품이 노출되지 않았습니다
+                          </td>
+                        </tr>
+                      ) : matrixProducts.map(product => (
                         <tr key={product} className="hover:bg-muted/20">
                           <td className="px-4 py-2.5 text-text-primary font-medium truncate max-w-[180px]">
                             <span title={product}>{product.length > 17 ? product.slice(0, 17) + '…' : product}</span>
                           </td>
-                          {matrixKeywords.map(kw => {
+                          {competitiveKeywords.map(kw => {
                             const item = matrixMap.get(`${product}||${kw}`)
                             return (
-                              <td key={kw} className="px-3 py-2.5 text-center">
+                              <td key={kw} className={`px-3 py-2.5 text-center ${unexposedKws.includes(kw) ? 'bg-red-50/30' : ''}`}>
                                 {item ? (
                                   <div className="flex flex-col items-center leading-tight">
                                     <span className="font-bold text-accent">{item.rank_position}위</span>
@@ -257,7 +298,7 @@ function SearchRanksTab({ data }: { data: SearchRanksData }) {
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="text-text-tertiary/50">—</span>
+                                  <span className="text-[10px] font-semibold text-red-400">미노출</span>
                                 )}
                               </td>
                             )
@@ -272,51 +313,61 @@ function SearchRanksTab({ data }: { data: SearchRanksData }) {
 
             {/* 키워드 탭 */}
             <div className="flex gap-1.5 flex-wrap">
-              {catKeywords.map(kw => (
+              {competitiveKeywords.map(kw => (
                 <button
                   key={kw}
                   onClick={() => setActiveCat(kw)}
                   className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                    (activeCat || catKeywords[0]) === kw
+                    activeCatKey === kw
                       ? 'bg-accent text-white border-accent'
                       : 'border-border text-text-secondary hover:text-text-primary hover:border-accent/40'
                   }`}
                 >
                   {kw}
+                  {unexposedKws.includes(kw) && (
+                    <span className="ml-1 text-[10px] text-red-400">미노출</span>
+                  )}
                 </button>
               ))}
             </div>
 
             {/* 순위 목록 */}
-            <div className="border border-border rounded-lg bg-surface overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between">
-                <p className="text-sm font-semibold text-text-primary">"{activeCatKey}" 검색 결과</p>
-                <p className="text-xs text-text-tertiary">{catItems[0]?.rank_date} 기준 · Top {catItems.length}</p>
+            {activeCatKey && (
+              <div className="border border-border rounded-lg bg-surface overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-border bg-muted/40 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-text-primary">"{activeCatKey}" 검색 결과</p>
+                  <p className="text-xs text-text-tertiary">
+                    {catItems[0]?.rank_date} 기준 · Top {catItems.length}
+                    {unexposedKws.includes(activeCatKey) && (
+                      <span className="ml-2 text-red-500 font-semibold">자사 미노출</span>
+                    )}
+                  </p>
+                </div>
+                <div className="divide-y divide-border">
+                  {catItems.slice(0, 30).map(item => (
+                    <div
+                      key={item.rank_position}
+                      className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${
+                        item.is_ours ? 'bg-accent-bg/30' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <RankMedal pos={item.rank_position} />
+                      <span className={`flex-1 text-xs leading-relaxed ${
+                        item.is_ours ? 'font-semibold text-accent' : 'text-text-primary'
+                      }`}>
+                        {item.is_ours && <span className="mr-1 text-accent">★</span>}
+                        {item.product_title}
+                      </span>
+                      <span className="text-[11px] text-text-tertiary shrink-0 w-20 text-right truncate">{item.mall_name}</span>
+                      <span className="text-[11px] text-text-secondary shrink-0 w-16 text-right">
+                        {item.price > 0 ? `${item.price.toLocaleString()}원` : '—'}
+                      </span>
+                      <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="divide-y divide-border">
-                {catItems.slice(0, 30).map(item => (
-                  <div
-                    key={item.rank_position}
-                    className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${
-                      item.is_ours ? 'bg-accent-bg/30' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <RankMedal pos={item.rank_position} />
-                    <span className={`flex-1 text-xs leading-relaxed ${
-                      item.is_ours ? 'font-semibold text-accent' : 'text-text-primary'
-                    }`}>
-                      {item.is_ours && <span className="mr-1 text-accent">★</span>}
-                      {item.product_title}
-                    </span>
-                    <span className="text-[11px] text-text-tertiary shrink-0 w-20 text-right truncate">{item.mall_name}</span>
-                    <span className="text-[11px] text-text-secondary shrink-0 w-16 text-right">
-                      {item.price > 0 ? `${item.price.toLocaleString()}원` : '—'}
-                    </span>
-                    <DeltaBadge delta={item.delta} prevRank={item.prev_rank} />
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>
