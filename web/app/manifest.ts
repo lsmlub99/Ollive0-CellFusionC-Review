@@ -11,8 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#FAFAF9',
     orientation: 'portrait-primary',
     icons: [
-      { src: '/api/pwa-icon?size=192', sizes: '192x192', type: 'image/png' },
-      { src: '/api/pwa-icon?size=512', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      { src: '/CFC.png', sizes: '192x192', type: 'image/png' },
+      { src: '/CFC.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   }
 }
