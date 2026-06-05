@@ -1,6 +1,7 @@
 import { getStats, getInsights, getScoreDist, getProductStats, getTimeSeries, getProductNegatives, getProductSummaries, getInsightsHistory, getProductRankingsByMode, getMarketRankings, getNewProducts, getNegativeAlerts, getOurRankingTimeline, getPromoStatus, getProductKeywords, getProductTopicInsights } from '@/lib/db'
 import { generateMarketInsight, generateReviewInsight, generateDailyBrief } from '@/lib/ai'
 import PlatformShell from '@/components/PlatformShell'
+import FeatureGuide from '@/components/FeatureGuide'
 
 export const revalidate = 300
 export const maxDuration = 60
@@ -105,8 +106,14 @@ export default async function Page() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1280px] px-4 md:px-6 py-10 md:py-16">
+      <main className="mx-auto max-w-[1600px] px-4 md:px-6 py-10 md:py-16">
+        <div className="flex gap-8">
+          {/* 왼쪽 기능 안내 사이드바 — 1400px 이상에서만 표시 */}
+          <aside className="hidden 2xl:block w-52 shrink-0">
+            <FeatureGuide />
+          </aside>
 
+          <div className="flex-1 min-w-0">
         <PlatformShell
           stats={stats}
           insights={insights}
@@ -130,15 +137,17 @@ export default async function Page() {
           productTopics={productTopics}
         />
 
-        {/* 푸터 */}
-        <footer className="pt-4 pb-8 text-center space-y-1.5">
-          <p className="font-label text-[10px] tracking-[0.15em] uppercase text-text-tertiary">
-            CellFusionC Review Intelligence
-          </p>
-          <p className="text-2xs text-text-tertiary/50">
-            올리브영 공식 브랜드관 실구매 리뷰 기준 · 매일 오전 6시 자동 수집
-          </p>
-        </footer>
+          {/* 푸터 */}
+          <footer className="pt-4 pb-8 text-center space-y-1.5">
+            <p className="font-label text-[10px] tracking-[0.15em] uppercase text-text-tertiary">
+              CellFusionC Review Intelligence
+            </p>
+            <p className="text-2xs text-text-tertiary/50">
+              올리브영 공식 브랜드관 실구매 리뷰 기준 · 매일 오전 6시 자동 수집
+            </p>
+          </footer>
+          </div>
+        </div>
       </main>
     </div>
   )
