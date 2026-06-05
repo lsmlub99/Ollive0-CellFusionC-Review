@@ -337,7 +337,7 @@ export async function POST(req: Request) {
           while (rounds <= 3) {
             const stream = await client.chat.completions.create({
               model: MODEL,
-              max_tokens: 1500,
+              max_completion_tokens: 1500,
               messages: msgs,
               tools: TOOLS,
               stream: true,

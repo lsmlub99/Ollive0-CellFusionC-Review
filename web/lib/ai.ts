@@ -25,7 +25,7 @@ function getSlot(): 'am' | 'pm' {
 async function chat(system: string, user: string, maxTokens: number): Promise<string> {
   const res = await getClient().chat.completions.create({
     model: MODEL,
-    max_tokens: maxTokens,
+    max_completion_tokens: maxTokens,
     messages: [
       { role: 'system', content: system },
       { role: 'user',   content: user },
@@ -310,7 +310,7 @@ export async function generateProductTopicInsights(
   try {
     const res = await getClient().chat.completions.create({
       model: MODEL,
-      max_tokens: 400,
+      max_completion_tokens: 400,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: '당신은 리뷰 분석 AI입니다. JSON만 출력하세요.' },
@@ -346,7 +346,7 @@ export async function generateOlivepickInsight(
   try {
     const res = await getClient().chat.completions.create({
       model: MODEL,
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: '당신은 올리브영 입점 브랜드의 전략 담당자입니다. JSON만 출력하세요.' },
