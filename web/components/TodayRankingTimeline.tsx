@@ -8,10 +8,17 @@ interface Props {
 }
 
 function fmtHour(h: number): string {
-  return h === 0 ? '자정' : h < 12 ? `오전 ${h}시` : h === 12 ? '오후 12시' : `오후 ${h - 12}시`
+  return h === 0 ? '자정' : h < 12 ? `오전 ${h}시` : h === 12 ? '정오' : `오후 ${h - 12}시`
 }
 
 const CATEGORY_ORDER = ['전체', '스킨케어', '마스크팩', '클렌징', '선케어', '더모 코스메틱', '바디케어', '맨즈에딧']
+
+function rankColor(rank: number): string {
+  if (rank <= 10) return '#16A34A'
+  if (rank <= 30) return '#2563EB'
+  if (rank <= 60) return '#CA8A04'
+  return '#78716C'
+}
 
 export default function TodayRankingTimeline({ data }: Props) {
   if (data.length === 0) return (
@@ -19,7 +26,7 @@ export default function TodayRankingTimeline({ data }: Props) {
       <SectionDivider tag="오늘 순위 타임라인" />
       <div className="border border-dashed border-border rounded-lg px-6 py-8 text-center">
         <p className="text-sm text-text-secondary">오늘 수집된 순위 데이터가 없어요</p>
-        <p className="text-xs text-text-tertiary mt-1">3시간마다 자동 수집됩니다</p>
+        <p className="text-xs text-text-tertiary mt-1">매 정시 자동 수집됩니다</p>
       </div>
     </section>
   )
@@ -45,14 +52,23 @@ export default function TodayRankingTimeline({ data }: Props) {
   }
   achievements.sort((a, b) => a.rank_position - b.rank_position)
 
-  const products = Array.from(productMap.entries())
+  const allHoursGlobal = Array.from(
+    new Set(data.map(e => e.rank_hour))
+  ).sort((a, b) => a - b)
+
+  const products = Array.from(productMap.entries()).filter(([, prod]) => {
+    const uniqueHours = new Set(Array.from(prod.categories.values()).flatMap(s => s.map(x => x.rank_hour)))
+    return uniqueHours.size >= 1
+  })
 
   return (
     <section>
       <SectionDivider tag="오늘 순위 타임라인" />
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-3 mb-4">
         <h2 className="text-xl font-semibold text-text-primary">오늘 시간별 순위 추이</h2>
-        <span className="text-sm text-text-tertiary">3시간 간격</span>
+        <span className="text-xs text-text-tertiary bg-muted px-2 py-0.5 rounded-full border border-border">
+          {allHoursGlobal.length}회 수집
+        </span>
       </div>
 
       {achievements.length > 0 && (
@@ -76,12 +92,6 @@ export default function TodayRankingTimeline({ data }: Props) {
             return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
           })
 
-          const allHours = Array.from(
-            new Set(Array.from(prod.categories.values()).flatMap(snaps => snaps.map(s => s.rank_hour)))
-          ).sort((a, b) => a - b)
-
-          if (allHours.length < 2) return null
-
           return (
             <div key={goods_no} className="border border-border rounded-lg bg-surface p-4 space-y-2">
               <p className="text-sm font-semibold text-text-primary">★ {prod.goods_name}</p>
@@ -90,38 +100,61 @@ export default function TodayRankingTimeline({ data }: Props) {
                   const sorted    = [...snaps].sort((a, b) => a.rank_hour - b.rank_hour)
                   const firstSnap = sorted[0]
                   const lastSnap  = sorted[sorted.length - 1]
-                  const firstPos  = firstSnap.rank_position
-                  const lastPos   = lastSnap.rank_position
-                  const delta     = firstPos - lastPos
+                  const delta     = firstSnap.rank_position - lastSnap.rank_position
                   const bestPos   = Math.min(...snaps.map(s => s.rank_position))
-                  const isBest    = lastPos === bestPos
+                  const snapCount = sorted.length
 
                   return (
-                    <div key={catName} className="flex items-center gap-3 py-2">
-                      <span className="shrink-0 text-xs text-text-secondary w-24 truncate">{catName}</span>
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
-                        <span className="text-text-tertiary">{firstPos}위</span>
-                        <span className="text-text-tertiary">→</span>
-                        <span className={isBest ? 'text-accent font-bold' : ''}>{lastPos}위</span>
+                    <div key={catName} className="py-2.5">
+                      <div className="flex items-center gap-3 mb-1.5">
+                        <span className="shrink-0 text-xs text-text-secondary w-24 truncate font-medium">{catName}</span>
+                        <div className="flex items-center gap-1 text-sm font-medium">
+                          <span className="font-bold" style={{ color: rankColor(firstSnap.rank_position) }}>{firstSnap.rank_position}위</span>
+                          <span className="text-text-tertiary text-xs">→</span>
+                          <span className="font-bold" style={{ color: rankColor(lastSnap.rank_position) }}>{lastSnap.rank_position}위</span>
+                        </div>
+                        {delta !== 0 && (
+                          <span className={`text-xs font-semibold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {delta > 0 ? `▲${delta}` : `▼${Math.abs(delta)}`}
+                          </span>
+                        )}
+                        {bestPos <= 3 && lastSnap.rank_position !== bestPos && (
+                          <span className="text-[10px] text-accent/70">최고 {bestPos}위</span>
+                        )}
+                        <span className="ml-auto text-[10px] text-text-tertiary">{snapCount}회 측정</span>
                       </div>
-                      {delta !== 0 && (
-                        <span className={`text-xs font-semibold ${delta > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {delta > 0 ? `▲${delta}` : `▼${Math.abs(delta)}`}
-                        </span>
-                      )}
-                      {bestPos <= 3 && lastPos !== bestPos && (
-                        <span className="text-[10px] text-accent/70 ml-1">최고 {bestPos}위</span>
-                      )}
-                      <span className="text-[10px] text-text-tertiary ml-auto">
-                        {fmtHour(firstSnap.rank_hour)} ~ {fmtHour(lastSnap.rank_hour)}
-                      </span>
+
+                      {/* 시간별 스냅샷 */}
+                      <div className="flex items-end gap-1 flex-wrap">
+                        {sorted.map((snap, i) => {
+                          const prevRank = i > 0 ? sorted[i - 1].rank_position : null
+                          const isImproved = prevRank !== null && snap.rank_position < prevRank
+                          const isWorsened = prevRank !== null && snap.rank_position > prevRank
+                          return (
+                            <div key={snap.rank_hour} className="flex flex-col items-center gap-0.5">
+                              <span
+                                className="text-[10px] font-bold leading-none px-1.5 py-0.5 rounded"
+                                style={{
+                                  color: rankColor(snap.rank_position),
+                                  background: `${rankColor(snap.rank_position)}14`,
+                                }}
+                              >
+                                {snap.rank_position}위
+                              </span>
+                              <span className="text-[9px] text-text-tertiary/70 whitespace-nowrap">{fmtHour(snap.rank_hour)}</span>
+                              {isImproved && <span className="text-[8px] text-emerald-500 leading-none">↑</span>}
+                              {isWorsened && <span className="text-[8px] text-red-400 leading-none">↓</span>}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )
                 })}
               </div>
             </div>
           )
-        }).filter(Boolean)}
+        })}
       </div>
     </section>
   )

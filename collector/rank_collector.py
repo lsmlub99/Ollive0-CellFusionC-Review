@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone, timedelta
 
 try:
     from curl_cffi import requests as cf_requests
-    _IMPERSONATE = "chrome120"
+    _IMPERSONATE = "chrome131"
 except ImportError:
     import requests as cf_requests
     _IMPERSONATE = None
@@ -22,9 +22,11 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from db.schema import get_conn, init_db
 
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     'Referer': 'https://www.oliveyoung.co.kr/store/main/getBestList.do',
     'Accept-Language': 'ko-KR,ko;q=0.9',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
 }
 
 CATEGORIES = [
@@ -77,42 +79,54 @@ def _is_unchanged(cur, cat_name: str, ranking: list[dict]) -> bool:
 
 
 def fetch_ranking(disp_cat: str, flt_cat: str | None) -> list[dict]:
-    """카테고리 베스트 페이지에서 {goods_no, name} 순위 리스트 반환"""
+    """카테고리 베스트 페이지에서 {goods_no, name} 순위 리스트 반환 (403 시 재시도 3회)"""
     params = {'dispCatNo': disp_cat, 'pageIdx': 1, 'rowsPerPage': ROWS_PER_PAGE}
     if flt_cat:
         params['fltDispCatNo'] = flt_cat
-    kwargs = dict(
-        params=params,
-        headers=HEADERS,
-        timeout=15,
-    )
-    if _IMPERSONATE:
-        r = cf_requests.get('https://www.oliveyoung.co.kr/store/main/getBestList.do',
-                            impersonate=_IMPERSONATE, **kwargs)
-    else:
-        r = cf_requests.get('https://www.oliveyoung.co.kr/store/main/getBestList.do', **kwargs)
+    kwargs = dict(params=params, headers=HEADERS, timeout=20)
 
-    if r.status_code != 200:
-        raise ValueError(f"HTTP {r.status_code}")
-    if len(r.text) < 1000:
-        raise ValueError(f"응답이 너무 짧음 ({len(r.text)}bytes) — 차단 의심")
-    soup = BeautifulSoup(r.text, 'html.parser')
-    seen = set()
-    results = []
-    for item in soup.select('.prd_info'):
-        parent = item.find_parent('li')
-        link = (parent or item).select_one('a[href*="goodsNo"]')
-        if not link:
-            continue
-        m = re.search(r'goodsNo=([A-Z0-9]+)', link.get('href', ''))
-        if not m or m.group(1) in seen:
-            continue
-        goods_no = m.group(1)
-        seen.add(goods_no)
-        name_el = item.select_one('.tx_name, .prd_name, strong.tx_name, .name')
-        name = name_el.get_text(strip=True) if name_el else ''
-        results.append({'goods_no': goods_no, 'name': name})
-    return results
+    last_err = None
+    for attempt in range(3):
+        if attempt > 0:
+            time.sleep(random.uniform(8, 15))
+        try:
+            if _IMPERSONATE:
+                r = cf_requests.get('https://www.oliveyoung.co.kr/store/main/getBestList.do',
+                                    impersonate=_IMPERSONATE, **kwargs)
+            else:
+                r = cf_requests.get('https://www.oliveyoung.co.kr/store/main/getBestList.do', **kwargs)
+
+            if r.status_code == 403:
+                last_err = ValueError(f"HTTP 403 (시도 {attempt+1}/3)")
+                continue
+            if r.status_code != 200:
+                raise ValueError(f"HTTP {r.status_code}")
+            if len(r.text) < 1000:
+                raise ValueError(f"응답이 너무 짧음 ({len(r.text)}bytes) — 차단 의심")
+
+            soup = BeautifulSoup(r.text, 'html.parser')
+            seen = set()
+            results = []
+            for item in soup.select('.prd_info'):
+                parent = item.find_parent('li')
+                link = (parent or item).select_one('a[href*="goodsNo"]')
+                if not link:
+                    continue
+                m = re.search(r'goodsNo=([A-Z0-9]+)', link.get('href', ''))
+                if not m or m.group(1) in seen:
+                    continue
+                goods_no = m.group(1)
+                seen.add(goods_no)
+                name_el = item.select_one('.tx_name, .prd_name, strong.tx_name, .name')
+                name = name_el.get_text(strip=True) if name_el else ''
+                results.append({'goods_no': goods_no, 'name': name})
+            return results
+        except ValueError:
+            raise
+        except Exception as e:
+            last_err = e
+
+    raise last_err or ValueError("3회 시도 실패")
 
 
 def run():
