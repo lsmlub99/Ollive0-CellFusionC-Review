@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Suspense } from 'react'
 import './globals.css'
 import ChatWidget from '@/components/ChatWidget'
+import PwaRegister from '@/components/PwaRegister'
 
 export const metadata: Metadata = {
   title: '셀퓨전씨 리뷰 인사이트',
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense>
           <ChatWidget />
         </Suspense>
+        <PwaRegister />
       </body>
     </html>
   )
