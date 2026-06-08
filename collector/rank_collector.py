@@ -91,9 +91,23 @@ _session_cookies: dict = {}
 
 def _save_ranking(conn, cur, rank_date, rank_hour, cat_name: str, ranking: list[dict], our_goods: set) -> int:
     """랭킹 저장 공통 로직. 저장한 항목 수 반환."""
+    hits = [(i + 1, item) for i, item in enumerate(ranking) if item['goods_no'] in our_goods]
+
     with conn.cursor() as c:
         if _is_unchanged(c, cat_name, ranking):
-            print(f"  변화 없음 — 저장 스킵")
+            # 전체 순위 변화 없어도 자사 상품 위치는 기록 (타임라인 연속성 보장)
+            if hits:
+                for rank, item in hits:
+                    c.execute("""
+                        INSERT INTO market_rankings (rank_date, rank_hour, category_name, rank_position, goods_no, goods_name)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (rank_date, rank_hour, category_name, rank_position)
+                        DO UPDATE SET goods_no = EXCLUDED.goods_no, goods_name = EXCLUDED.goods_name
+                    """, (rank_date, rank_hour, cat_name, rank, item['goods_no'], item['name']))
+                print(f"  변화 없음 — 자사 {len(hits)}개 위치만 저장: " +
+                      ", ".join(f"{r}위 {it['goods_no']}" for r, it in hits))
+            else:
+                print(f"  변화 없음 — 저장 스킵")
             return 0
 
         for rank, item in enumerate(ranking, 1):
@@ -104,7 +118,6 @@ def _save_ranking(conn, cur, rank_date, rank_hour, cat_name: str, ranking: list[
                 DO UPDATE SET goods_no = EXCLUDED.goods_no, goods_name = EXCLUDED.goods_name
             """, (rank_date, rank_hour, cat_name, rank, item['goods_no'], item['name']))
 
-        hits = [(i + 1, item) for i, item in enumerate(ranking) if item['goods_no'] in our_goods]
         for rank, item in hits:
             c.execute("""
                 INSERT INTO product_rankings (rank_date, goods_no, category_name, rank_position)
