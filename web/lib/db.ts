@@ -302,6 +302,34 @@ export async function getProductStats(): Promise<ProductStats[]> {
   `)
 }
 
+export async function getTimeSeriesWeekly(from: string, to: string): Promise<TimeSeriesPoint[]> {
+  const rows = await query<{ month: string; review_cnt: string; avg_score: string; pos_pct: string; neg_pct: string }>(`
+    SELECT
+      TO_CHAR(DATE_TRUNC('week', created_at::date), 'IYYY-"W"IW') AS month,
+      COUNT(*)                            AS review_cnt,
+      ROUND(AVG(score)::numeric, 2)       AS avg_score,
+      ROUND(
+        COUNT(*) FILTER (WHERE score >= 4)::numeric / NULLIF(COUNT(*), 0) * 100, 1
+      )                                   AS pos_pct,
+      ROUND(
+        COUNT(*) FILTER (WHERE score <= 2)::numeric / NULLIF(COUNT(*), 0) * 100, 1
+      )                                   AS neg_pct
+    FROM reviews
+    WHERE created_at IS NOT NULL AND LENGTH(created_at) >= 10
+      AND created_at::date >= $1::date
+      AND created_at::date < $2::date
+    GROUP BY DATE_TRUNC('week', created_at::date)
+    ORDER BY DATE_TRUNC('week', created_at::date)
+  `, [from, to])
+  return rows.map(r => ({
+    month:      r.month,
+    review_cnt: Number(r.review_cnt),
+    avg_score:  Number(r.avg_score),
+    pos_pct:    Number(r.pos_pct),
+    neg_pct:    Number(r.neg_pct),
+  }))
+}
+
 export async function getTimeSeries(): Promise<TimeSeriesPoint[]> {
   const rows = await query<{ month: string; review_cnt: string; avg_score: string; pos_pct: string; neg_pct: string }>(`
     SELECT
