@@ -1342,6 +1342,139 @@ export async function getNaverMarket() {
   `)
 }
 
+// ── MCP 고도화 툴 ──────────────────────────────────────────────────────────────
+
+export async function getReviewsByDate(date: string, goodsNo = '') {
+  return query<{ goods_name: string; score: number; content: string; created_at: string; skin_type: string | null; is_repurchase: boolean }>(`
+    SELECT p.goods_name, r.score, r.content, r.created_at, r.skin_type, r.is_repurchase
+    FROM reviews r
+    JOIN products p ON r.goods_no = p.goods_no
+    WHERE r.created_at::date = $1::date
+      AND ($2 = '' OR r.goods_no = $2)
+      AND r.content IS NOT NULL AND r.content != ''
+    ORDER BY r.created_at
+    LIMIT 200
+  `, [date, goodsNo])
+}
+
+export async function getReviewContent(opts: {
+  goodsNo?: string
+  date?: string
+  filter?: 'all' | 'positive' | 'negative'
+  limit?: number
+}) {
+  const { goodsNo = '', date = '', filter = 'all', limit = 50 } = opts
+  const scoreFilter =
+    filter === 'positive' ? 'AND r.score >= 4' :
+    filter === 'negative' ? 'AND r.score <= 2' : ''
+  return query<{ goods_name: string; score: number; content: string; created_at: string; skin_type: string | null; is_repurchase: boolean }>(`
+    SELECT p.goods_name, r.score, r.content, r.created_at, r.skin_type, r.is_repurchase
+    FROM reviews r
+    JOIN products p ON r.goods_no = p.goods_no
+    WHERE ($1 = '' OR r.goods_no = $1)
+      AND ($2 = '' OR r.created_at::date = $2::date)
+      AND r.content IS NOT NULL AND r.content != ''
+      ${scoreFilter}
+    ORDER BY r.created_at DESC
+    LIMIT $3
+  `, [goodsNo, date, limit])
+}
+
+export async function getWeeklyDelta() {
+  const rows = await query<{
+    this_cnt: string; last_cnt: string
+    this_score: string; last_score: string
+    this_pos: string; last_pos: string
+    this_neg: string; last_neg: string
+  }>(`
+    SELECT
+      COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7)              AS this_cnt,
+      COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8) AS last_cnt,
+      ROUND(AVG(score) FILTER (WHERE created_at::date >= CURRENT_DATE - 7)::numeric, 2)        AS this_score,
+      ROUND(AVG(score) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8)::numeric, 2) AS last_score,
+      ROUND(100.0 * COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7 AND score >= 4)
+        / NULLIF(COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7), 0), 1) AS this_pos,
+      ROUND(100.0 * COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8 AND score >= 4)
+        / NULLIF(COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8), 0), 1) AS last_pos,
+      ROUND(100.0 * COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7 AND score <= 2)
+        / NULLIF(COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7), 0), 1) AS this_neg,
+      ROUND(100.0 * COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8 AND score <= 2)
+        / NULLIF(COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8), 0), 1) AS last_neg
+    FROM reviews
+    WHERE created_at::date >= CURRENT_DATE - 14
+  `)
+  const r = rows[0]
+  const tw = { review_cnt: Number(r.this_cnt), avg_score: Number(r.this_score), pos_pct: Number(r.this_pos), neg_pct: Number(r.this_neg) }
+  const lw = { review_cnt: Number(r.last_cnt), avg_score: Number(r.last_score), pos_pct: Number(r.last_pos), neg_pct: Number(r.last_neg) }
+  return {
+    this_week: tw,
+    last_week: lw,
+    delta: {
+      review_cnt: tw.review_cnt - lw.review_cnt,
+      avg_score:  Math.round((tw.avg_score - lw.avg_score) * 100) / 100,
+      pos_pct:    Math.round((tw.pos_pct - lw.pos_pct) * 10) / 10,
+      neg_pct:    Math.round((tw.neg_pct - lw.neg_pct) * 10) / 10,
+    },
+  }
+}
+
+export async function getProductSummaryFull(goodsNo: string) {
+  const [statsRows, posRows, negRows, recentRows, rankRows] = await Promise.all([
+    query<{ goods_name: string; review_cnt: string; avg_score: string; repurchase_pct: string; five_star_cnt: string }>(`
+      SELECT p.goods_name,
+        COUNT(r.review_id) AS review_cnt,
+        ROUND(AVG(r.score)::numeric, 2) AS avg_score,
+        ROUND(100.0 * SUM(CASE WHEN r.is_repurchase THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS repurchase_pct,
+        COUNT(*) FILTER (WHERE r.score = 5) AS five_star_cnt
+      FROM products p LEFT JOIN reviews r ON p.goods_no = r.goods_no
+      WHERE p.goods_no = $1
+      GROUP BY p.goods_no, p.goods_name
+    `, [goodsNo]),
+    query<{ word: string; cnt: string }>(`
+      SELECT word, COUNT(*) AS cnt FROM (
+        SELECT UNNEST(REGEXP_MATCHES(r.content, '[가-힣]{2,6}', 'g')) AS word
+        FROM reviews r WHERE r.goods_no = $1 AND r.score >= 4 AND r.content IS NOT NULL
+      ) t
+      WHERE word NOT IN (${STOPWORDS})
+      GROUP BY word ORDER BY cnt DESC LIMIT 10
+    `, [goodsNo]),
+    query<{ word: string; cnt: string }>(`
+      SELECT word, COUNT(*) AS cnt FROM (
+        SELECT UNNEST(REGEXP_MATCHES(r.content, '[가-힣]{2,6}', 'g')) AS word
+        FROM reviews r WHERE r.goods_no = $1 AND r.score <= 2 AND r.content IS NOT NULL
+      ) t
+      WHERE word NOT IN (${STOPWORDS})
+      GROUP BY word ORDER BY cnt DESC LIMIT 10
+    `, [goodsNo]),
+    query<{ score: number; content: string; created_at: string; skin_type: string | null; is_repurchase: boolean }>(`
+      SELECT score, content, created_at, skin_type, is_repurchase
+      FROM reviews WHERE goods_no = $1 AND content IS NOT NULL AND content != ''
+      ORDER BY created_at DESC LIMIT 5
+    `, [goodsNo]),
+    query<{ category_name: string; rank_position: number; rank_date: string }>(`
+      SELECT category_name, rank_position, rank_date::text
+      FROM market_rankings WHERE goods_no = $1
+      ORDER BY rank_date DESC, rank_position LIMIT 20
+    `, [goodsNo]),
+  ])
+
+  const s = statsRows[0]
+  return {
+    goods_no:          goodsNo,
+    goods_name:        s?.goods_name ?? '',
+    stats: {
+      review_cnt:     Number(s?.review_cnt ?? 0),
+      avg_score:      Number(s?.avg_score ?? 0),
+      repurchase_pct: Number(s?.repurchase_pct ?? 0),
+      five_star_cnt:  Number(s?.five_star_cnt ?? 0),
+    },
+    positive_keywords: posRows.map(r => ({ word: r.word, cnt: Number(r.cnt) })),
+    negative_keywords: negRows.map(r => ({ word: r.word, cnt: Number(r.cnt) })),
+    recent_reviews:    recentRows,
+    ranking:           rankRows,
+  }
+}
+
 export async function getNaverLatestInsight() {
   const rows = await nvQuery<{ id: number; content: string; collected_at: string }>(`
     SELECT id, content,

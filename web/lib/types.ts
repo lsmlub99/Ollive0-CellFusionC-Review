@@ -222,6 +222,31 @@ export interface TodayDealHistoryResponse {
   total: number
 }
 
+export interface ReviewContent {
+  goods_name: string
+  score: number
+  content: string
+  created_at: string
+  skin_type: string | null
+  is_repurchase: boolean
+}
+
+export interface WeeklyDelta {
+  this_week: { review_cnt: number; avg_score: number; pos_pct: number; neg_pct: number }
+  last_week: { review_cnt: number; avg_score: number; pos_pct: number; neg_pct: number }
+  delta: { review_cnt: number; avg_score: number; pos_pct: number; neg_pct: number }
+}
+
+export interface ProductSummaryFull {
+  goods_no: string
+  goods_name: string
+  stats: { review_cnt: number; avg_score: number; repurchase_pct: number; five_star_cnt: number }
+  positive_keywords: KeywordItem[]
+  negative_keywords: KeywordItem[]
+  recent_reviews: ReviewContent[]
+  ranking: { category_name: string; rank_position: number; rank_date: string }[]
+}
+
 export interface InsightsSnapshot {
   id: number
   snapshot_at: string

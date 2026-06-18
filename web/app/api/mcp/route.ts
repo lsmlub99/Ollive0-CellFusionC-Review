@@ -16,6 +16,7 @@ import {
   getProductStats, getInsights, getNewProducts, getOurRankingTimeline,
   getCoupangStats, getCoupangProductStats, getCoupangRankings, getCoupangRecentReviews,
   getNaverTrends, getNaverSearchRanks, getNaverMarket, getNaverLatestInsight,
+  getReviewsByDate, getReviewContent, getWeeklyDelta, getProductSummaryFull,
 } from '@/lib/db'
 
 export const maxDuration = 60
@@ -187,6 +188,58 @@ function buildMcpServer(): McpServer {
     {},
     async () => {
       const data = await getNaverLatestInsight()
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  // ── 고도화 툴 ─────────────────────────────────────────────────────────────────
+
+  server.tool(
+    'get_reviews_by_date',
+    '특정 날짜에 등록된 올리브영 리뷰 목록. 날짜별 소비자 반응 파악에 사용.',
+    {
+      date:     z.string().describe('조회할 날짜 (YYYY-MM-DD 형식, 예: 2026-06-05)'),
+      goods_no: z.string().optional().describe('특정 상품 번호. 생략 시 전체 상품.'),
+    },
+    async ({ date, goods_no }) => {
+      const data = await getReviewsByDate(date, goods_no ?? '')
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_review_content',
+    '실제 리뷰 텍스트 조회. AI가 리뷰 내용을 직접 읽고 분석할 때 사용. 날짜·상품·긍부정 필터 지원.',
+    {
+      goods_no: z.string().optional().describe('특정 상품 번호. 생략 시 전체.'),
+      date:     z.string().optional().describe('특정 날짜 필터 (YYYY-MM-DD).'),
+      filter:   z.enum(['all', 'positive', 'negative']).optional().describe('all(기본)/positive(4~5점)/negative(1~2점)'),
+      limit:    z.number().optional().describe('최대 반환 건수 (기본 50, 최대 200)'),
+    },
+    async ({ goods_no, date, filter, limit }) => {
+      const data = await getReviewContent({ goodsNo: goods_no, date, filter, limit: Math.min(limit ?? 50, 200) })
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_weekly_delta',
+    '이번 주 vs 지난 주 비교. 리뷰 수·평균 별점·긍정비율·부정비율 변화량(delta) 포함.',
+    {},
+    async () => {
+      const data = await getWeeklyDelta()
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_product_summary',
+    '상품 하나에 대한 종합 분석: 기본 통계 + 긍/부정 키워드 Top 10 + 최근 리뷰 5건 + 순위 이력.',
+    {
+      goods_no: z.string().describe('상품 번호 (get_product_stats에서 확인 가능)'),
+    },
+    async ({ goods_no }) => {
+      const data = await getProductSummaryFull(goods_no)
       return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
     }
   )

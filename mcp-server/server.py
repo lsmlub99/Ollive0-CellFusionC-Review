@@ -294,6 +294,168 @@ def get_today_ranking() -> list[dict]:
         conn.close()
 
 
+@mcp.tool()
+def get_reviews_by_date(date: str, goods_no: str = "") -> list[dict]:
+    """특정 날짜에 등록된 올리브영 리뷰 목록.
+    date: YYYY-MM-DD 형식 (예: 2026-06-05). goods_no 생략 시 전체 상품."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.goods_name, r.score, r.content, r.created_at, r.skin_type, r.is_repurchase
+                FROM reviews r
+                JOIN products p ON r.goods_no = p.goods_no
+                WHERE r.created_at::date = %s::date
+                  AND (%s = '' OR r.goods_no = %s)
+                  AND r.content IS NOT NULL AND r.content != ''
+                ORDER BY r.created_at
+                LIMIT 200
+            """, (date, goods_no, goods_no))
+            return serialize(cur.fetchall())
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def get_review_content(
+    goods_no: str = "",
+    date: str = "",
+    filter: str = "all",
+    limit: int = 50,
+) -> list[dict]:
+    """실제 리뷰 텍스트 조회. AI가 리뷰 내용을 직접 읽고 분석할 때 사용.
+    filter: all / positive(4~5점) / negative(1~2점). limit 최대 200."""
+    score_filter = ""
+    if filter == "positive":
+        score_filter = "AND r.score >= 4"
+    elif filter == "negative":
+        score_filter = "AND r.score <= 2"
+    limit = min(limit, 200)
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"""
+                SELECT p.goods_name, r.score, r.content, r.created_at, r.skin_type, r.is_repurchase
+                FROM reviews r
+                JOIN products p ON r.goods_no = p.goods_no
+                WHERE (%s = '' OR r.goods_no = %s)
+                  AND (%s = '' OR r.created_at::date = %s::date)
+                  AND r.content IS NOT NULL AND r.content != ''
+                  {score_filter}
+                ORDER BY r.created_at DESC
+                LIMIT %s
+            """, (goods_no, goods_no, date, date, limit))
+            return serialize(cur.fetchall())
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def get_weekly_delta() -> dict:
+    """이번 주 vs 지난 주 비교. 리뷰 수·평균 별점·긍정비율·부정비율 변화량(delta) 포함."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7)              AS this_cnt,
+                    COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8) AS last_cnt,
+                    ROUND(AVG(score) FILTER (WHERE created_at::date >= CURRENT_DATE - 7)::numeric, 2) AS this_score,
+                    ROUND(AVG(score) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8)::numeric, 2) AS last_score,
+                    ROUND(100.0 * COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7 AND score >= 4)
+                        / NULLIF(COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7), 0), 1) AS this_pos,
+                    ROUND(100.0 * COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8 AND score >= 4)
+                        / NULLIF(COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8), 0), 1) AS last_pos,
+                    ROUND(100.0 * COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7 AND score <= 2)
+                        / NULLIF(COUNT(*) FILTER (WHERE created_at::date >= CURRENT_DATE - 7), 0), 1) AS this_neg,
+                    ROUND(100.0 * COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8 AND score <= 2)
+                        / NULLIF(COUNT(*) FILTER (WHERE created_at::date BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE - 8), 0), 1) AS last_neg
+                FROM reviews
+                WHERE created_at::date >= CURRENT_DATE - 14
+            """)
+            r = dict(cur.fetchone())
+            tw = {"review_cnt": int(r["this_cnt"] or 0), "avg_score": float(r["this_score"] or 0),
+                  "pos_pct": float(r["this_pos"] or 0), "neg_pct": float(r["this_neg"] or 0)}
+            lw = {"review_cnt": int(r["last_cnt"] or 0), "avg_score": float(r["last_score"] or 0),
+                  "pos_pct": float(r["last_pos"] or 0), "neg_pct": float(r["last_neg"] or 0)}
+            return {
+                "this_week": tw,
+                "last_week": lw,
+                "delta": {
+                    "review_cnt": tw["review_cnt"] - lw["review_cnt"],
+                    "avg_score":  round(tw["avg_score"] - lw["avg_score"], 2),
+                    "pos_pct":    round(tw["pos_pct"] - lw["pos_pct"], 1),
+                    "neg_pct":    round(tw["neg_pct"] - lw["neg_pct"], 1),
+                },
+            }
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def get_product_summary(goods_no: str) -> dict:
+    """상품 하나에 대한 종합 분석: 기본 통계 + 긍/부정 키워드 Top 10 + 최근 리뷰 5건 + 순위 이력.
+    goods_no는 get_product_stats에서 확인 가능."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.goods_name,
+                    COUNT(r.review_id) AS review_cnt,
+                    ROUND(AVG(r.score)::numeric, 2) AS avg_score,
+                    ROUND(100.0 * SUM(CASE WHEN r.is_repurchase THEN 1 ELSE 0 END)
+                        / NULLIF(COUNT(*), 0), 1) AS repurchase_pct,
+                    COUNT(*) FILTER (WHERE r.score = 5) AS five_star_cnt
+                FROM products p LEFT JOIN reviews r ON p.goods_no = r.goods_no
+                WHERE p.goods_no = %s
+                GROUP BY p.goods_no, p.goods_name
+            """, (goods_no,))
+            stats_row = cur.fetchone()
+
+            cur.execute("""
+                SELECT content FROM reviews
+                WHERE goods_no = %s AND score >= 4 AND content IS NOT NULL LIMIT 300
+            """, (goods_no,))
+            pos_reviews = [r["content"] for r in cur.fetchall()]
+
+            cur.execute("""
+                SELECT content FROM reviews
+                WHERE goods_no = %s AND score <= 2 AND content IS NOT NULL LIMIT 200
+            """, (goods_no,))
+            neg_reviews = [r["content"] for r in cur.fetchall()]
+
+            cur.execute("""
+                SELECT score, content, created_at::text, skin_type, is_repurchase
+                FROM reviews WHERE goods_no = %s AND content IS NOT NULL AND content != ''
+                ORDER BY created_at DESC LIMIT 5
+            """, (goods_no,))
+            recent = serialize(cur.fetchall())
+
+            cur.execute("""
+                SELECT category_name, rank_position, rank_date::text
+                FROM market_rankings WHERE goods_no = %s
+                ORDER BY rank_date DESC, rank_position LIMIT 20
+            """, (goods_no,))
+            ranking = serialize(cur.fetchall())
+
+            return {
+                "goods_no":   goods_no,
+                "goods_name": stats_row["goods_name"] if stats_row else "",
+                "stats": {
+                    "review_cnt":     int(stats_row["review_cnt"] or 0) if stats_row else 0,
+                    "avg_score":      float(stats_row["avg_score"] or 0) if stats_row else 0,
+                    "repurchase_pct": float(stats_row["repurchase_pct"] or 0) if stats_row else 0,
+                    "five_star_cnt":  int(stats_row["five_star_cnt"] or 0) if stats_row else 0,
+                },
+                "positive_keywords": _top_keywords([{"content": c} for c in pos_reviews], 10),
+                "negative_keywords": _top_keywords([{"content": c} for c in neg_reviews], 10),
+                "recent_reviews": recent,
+                "ranking": ranking,
+            }
+    finally:
+        conn.close()
+
+
 # ── 인증 미들웨어 ──────────────────────────────────────
 
 class APIKeyMiddleware:
