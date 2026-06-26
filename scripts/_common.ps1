@@ -80,8 +80,10 @@ function Invoke-Collector([string]$module, [string]$label, [int]$timeoutMin = 20
 
     if ($code -ne 0) {
         "[$end] FAILED (exit=$code)" | Out-File -Append -Encoding UTF8 $logFile
-        $tail = (Get-Content $logFile -Encoding UTF8 -Tail 15) -join "`n"
-        Send-Swit "[OY] X  $label 실패 | $end`n종료코드: $code`n$('=' * 20)`n$tail"
+        $errLine = (Get-Content $logFile -Encoding UTF8) |
+            Where-Object { $_ -match 'Error:|Exception:|FAILED' -and $_ -notmatch '^\s+File ' } |
+            Select-Object -Last 1
+        Send-Swit "❌❌❌ [OY] $label 실패❌❌❌`n$end`n$errLine"
     } else {
         "[$end] OK" | Out-File -Append -Encoding UTF8 $logFile
         $summary = Get-Summary $outLines
