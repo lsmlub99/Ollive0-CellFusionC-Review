@@ -55,13 +55,18 @@ def init_db(conn=None):
         with c.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS products (
-                    goods_no    TEXT PRIMARY KEY,
-                    goods_name  TEXT,
-                    rating      REAL,
+                    goods_no     TEXT PRIMARY KEY,
+                    goods_name   TEXT,
+                    rating       REAL,
                     review_count TEXT,
-                    first_seen  DATE DEFAULT CURRENT_DATE,
-                    last_seen   DATE DEFAULT CURRENT_DATE
+                    first_seen   DATE DEFAULT CURRENT_DATE,
+                    last_seen    DATE DEFAULT CURRENT_DATE,
+                    is_competitor BOOLEAN NOT NULL DEFAULT false
                 )
+            """)
+            cur.execute("""
+                ALTER TABLE products
+                    ADD COLUMN IF NOT EXISTS is_competitor BOOLEAN NOT NULL DEFAULT false
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS reviews (
@@ -328,9 +333,10 @@ def get_existing_review_ids(conn=None) -> set[int]:
 
 
 def get_all_products(conn=None) -> list[dict]:
+    """자사 상품만 반환 (is_competitor=false)"""
     def _run(c):
         with c.cursor() as cur:
-            cur.execute("SELECT goods_no, goods_name FROM products ORDER BY goods_name")
+            cur.execute("SELECT goods_no, goods_name FROM products WHERE is_competitor = false ORDER BY goods_name")
             return list(cur.fetchall())
 
     if conn is not None:
@@ -338,6 +344,41 @@ def get_all_products(conn=None) -> list[dict]:
     else:
         with get_conn() as c:
             return _run(c)
+
+
+def get_competitor_products(conn=None) -> list[dict]:
+    def _run(c):
+        with c.cursor() as cur:
+            cur.execute("SELECT goods_no, goods_name FROM products WHERE is_competitor = true ORDER BY goods_name")
+            return list(cur.fetchall())
+
+    if conn is not None:
+        return _run(conn)
+    else:
+        with get_conn() as c:
+            return _run(c)
+
+
+def upsert_competitor_products(products: list[dict], conn=None):
+    """경쟁사 상품 등록 (기존 자사 상품은 건드리지 않음)"""
+    if not products:
+        return
+
+    def _run(c):
+        with c.cursor() as cur:
+            for p in products:
+                cur.execute("""
+                    INSERT INTO products (goods_no, goods_name, is_competitor)
+                    VALUES (%s, %s, true)
+                    ON CONFLICT (goods_no) DO NOTHING
+                """, (p["goods_no"], p["goods_name"]))
+
+    if conn is not None:
+        _run(conn)
+    else:
+        with get_conn() as c:
+            _run(c)
+            c.commit()
 
 
 def snapshot_insights(new_reviews: int, conn=None):

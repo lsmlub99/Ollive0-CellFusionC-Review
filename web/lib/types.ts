@@ -103,6 +103,11 @@ export interface ProductSummary {
   generated_at: string
 }
 
+export interface CompetitorSummary extends ProductSummary {
+  categories: { name: string; rank: number }[]
+  review_cnt: number
+}
+
 export interface ProductRankingData {
   goods_no: string
   goods_name: string

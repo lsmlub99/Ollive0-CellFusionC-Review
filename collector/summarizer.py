@@ -9,7 +9,7 @@ load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from anthropic import Anthropic
-from db.schema import get_conn, init_db
+from db.schema import get_conn, init_db, get_all_products, get_competitor_products
 
 client = Anthropic()  # reads ANTHROPIC_API_KEY from env
 
@@ -59,15 +59,24 @@ def summarize_product(goods_name: str, reviews: list[dict]) -> dict:
     return json.loads(text.strip())
 
 
-def run():
-    print(f"=== 상품 리뷰 AI 요약 시작 ===\n")
+def run(mode: str = "ours"):
+    """
+    mode: 'ours' (자사만), 'competitors' (경쟁사만), 'all' (전체)
+    """
+    label = {'ours': '자사', 'competitors': '경쟁사', 'all': '전체'}.get(mode, '자사')
+    print(f"=== 상품 리뷰 AI 요약 시작 ({label}) ===\n")
     conn = get_conn()
     conn.autocommit = True
     try:
         init_db(conn=conn)
-        with conn.cursor() as cur:
-            cur.execute("SELECT goods_no, goods_name FROM products ORDER BY goods_name")
-            products = list(cur.fetchall())
+        if mode == "competitors":
+            products = get_competitor_products(conn=conn)
+        elif mode == "all":
+            with conn.cursor() as cur:
+                cur.execute("SELECT goods_no, goods_name FROM products ORDER BY goods_name")
+                products = list(cur.fetchall())
+        else:
+            products = get_all_products(conn=conn)
 
         print(f"상품 {len(products)}개\n")
 
@@ -130,4 +139,8 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["ours", "competitors", "all"], default="ours")
+    args = parser.parse_args()
+    run(mode=args.mode)

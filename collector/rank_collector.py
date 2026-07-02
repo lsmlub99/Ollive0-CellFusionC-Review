@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from db.schema import get_conn, init_db
+from db.schema import get_conn, init_db, upsert_competitor_products
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -231,6 +231,39 @@ def fetch_ranking(disp_cat: str, flt_cat: str | None) -> list[dict]:
     raise last_err or ValueError("2회 시도 실패")
 
 
+def _seed_top_competitors(conn, our_goods: set, top_n: int = 5):
+    """카테고리별 상위 N개 비자사 상품을 products 테이블에 경쟁사로 등록"""
+    target_cats = ('선케어', '선스틱', '선세럼·미스트', '더모 코스메틱', '스킨케어')
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT ON (category_name, rank_position)
+                   goods_no, goods_name, category_name, rank_position
+            FROM market_rankings
+            WHERE rank_date = CURRENT_DATE
+              AND category_name = ANY(%s)
+            ORDER BY category_name, rank_position
+        """, (list(target_cats),))
+        rows = cur.fetchall()
+
+    seen: set[str] = set()
+    candidates: list[dict] = []
+    cat_count: dict[str, int] = {}
+    for r in rows:
+        if r['goods_no'] in our_goods:
+            continue
+        cat = r['category_name']
+        if cat_count.get(cat, 0) >= top_n:
+            continue
+        if r['goods_no'] not in seen:
+            seen.add(r['goods_no'])
+            candidates.append({'goods_no': r['goods_no'], 'goods_name': r['goods_name']})
+        cat_count[cat] = cat_count.get(cat, 0) + 1
+
+    if candidates:
+        upsert_competitor_products(candidates, conn=conn)
+        print(f"  경쟁사 시딩: {len(candidates)}개 등록/확인 완료")
+
+
 def run():
     KST = timezone(timedelta(hours=9))
     now_kst = datetime.now(KST)
@@ -285,6 +318,10 @@ def run():
                 time.sleep(random.uniform(20, 35))
 
         print(f"\n=== 완료 - {total_saved}개 시장 순위 저장 ===")
+
+        # 상위 경쟁사 자동 시딩 (카테고리별 top 5 비자사 상품)
+        _seed_top_competitors(conn, our_goods)
+
         revalidate_vercel()
 
     finally:

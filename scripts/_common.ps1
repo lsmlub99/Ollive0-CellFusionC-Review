@@ -41,7 +41,7 @@ function Get-Summary([string[]]$lines) {
     return ($result -join "`n")
 }
 
-function Invoke-Collector([string]$module, [string]$label, [int]$timeoutMin = 20) {
+function Invoke-Collector([string]$module, [string]$label, [int]$timeoutMin = 20, [string]$extraArgs = "") {
     if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Path $LOG_DIR | Out-Null }
 
     $dateStr = Get-Date -Format "yyyyMMdd"
@@ -53,8 +53,10 @@ function Invoke-Collector([string]$module, [string]$label, [int]$timeoutMin = 20
     $stdout = "$LOG_DIR\_stdout.tmp"
     $stderr = "$LOG_DIR\_stderr.tmp"
 
+    $argList = "-m $module"
+    if ($extraArgs) { $argList = "$argList $extraArgs" }
     $proc = Start-Process -FilePath $PYTHON `
-        -ArgumentList "-m $module" `
+        -ArgumentList $argList `
         -WorkingDirectory $REPO `
         -RedirectStandardOutput $stdout `
         -RedirectStandardError  $stderr `

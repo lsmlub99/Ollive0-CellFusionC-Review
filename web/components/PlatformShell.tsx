@@ -8,7 +8,7 @@ import CoupangDashboard from '@/components/CoupangDashboard'
 import NaverDashboard from '@/components/NaverDashboard'
 import type {
   Stats, Insights, TimeSeriesPoint, ProductNegativeData, ScoreDist,
-  ProductStats, ProductSummary, InsightsSnapshot, ProductRankingData,
+  ProductStats, ProductSummary, CompetitorSummary, InsightsSnapshot, ProductRankingData,
   MarketCategoryData, NewProductData, NegativeAlertData,
   OurRankingTimelineEntry, PromoStatusData, ProductKeywordData, ProductTopicData
 } from '@/lib/types'
@@ -21,6 +21,7 @@ interface Props {
   scoreDist: ScoreDist[]
   productStats: ProductStats[]
   summaries: ProductSummary[]
+  competitorSummaries: CompetitorSummary[]
   insightsHistory: InsightsSnapshot[]
   rankingsByMode: { best: ProductRankingData[]; avg: ProductRankingData[]; weekly: ProductRankingData[] }
   rankingsLastCollected: Record<string, string>
@@ -38,7 +39,7 @@ interface Props {
 
 export default function PlatformShell({
   stats, insights, timeSeries, negativeData, scoreDist, productStats,
-  summaries, insightsHistory, rankingsByMode, rankingsLastCollected,
+  summaries, competitorSummaries, insightsHistory, rankingsByMode, rankingsLastCollected,
   marketRankings, aiInsight, reviewInsight, dailyBrief,
   newProducts, negativeAlerts, todayTimeline, promoStatus,
   productKeywords, productTopics,
@@ -106,6 +107,7 @@ export default function PlatformShell({
             scoreDist={scoreDist}
             productStats={productStats}
             summaries={summaries}
+            competitorSummaries={competitorSummaries}
             insightsHistory={insightsHistory}
             rankingsByMode={rankingsByMode}
             rankingsLastCollected={rankingsLastCollected}

@@ -1,4 +1,4 @@
-import { getStats, getInsights, getScoreDist, getProductStats, getTimeSeries, getProductNegatives, getProductSummaries, getInsightsHistory, getProductRankingsByMode, getMarketRankings, getNewProducts, getNegativeAlerts, getOurRankingTimeline, getPromoStatus, getProductKeywords, getProductTopicInsights } from '@/lib/db'
+import { getStats, getInsights, getScoreDist, getProductStats, getTimeSeries, getProductNegatives, getProductSummaries, getCompetitorSummaries, getInsightsHistory, getProductRankingsByMode, getMarketRankings, getNewProducts, getNegativeAlerts, getOurRankingTimeline, getPromoStatus, getProductKeywords, getProductTopicInsights } from '@/lib/db'
 import { generateMarketInsight, generateReviewInsight, generateDailyBrief } from '@/lib/ai'
 import PlatformShell from '@/components/PlatformShell'
 import FeatureGuide from '@/components/FeatureGuide'
@@ -40,7 +40,7 @@ export default async function Page() {
   const insightsDefault = { positive_keywords: [], negative_keywords: [], total_reviews: 0, skin_dist: [], top_product: null }
   const rankingsDefault = { best: [], avg: [], weekly: [], lastCollected: {} }
 
-  const [stats, insights, scoreDist, productStats, timeSeries, negativeData, summaries, insightsHistory, rankingsData, marketRankings, newProducts, negativeAlerts, todayTimeline, promoStatus, productKeywords] = await Promise.all([
+  const [stats, insights, scoreDist, productStats, timeSeries, negativeData, summaries, competitorSummaries, insightsHistory, rankingsData, marketRankings, newProducts, negativeAlerts, todayTimeline, promoStatus, productKeywords] = await Promise.all([
     safe(getStats, statsDefault),
     safe(getInsights, insightsDefault),
     safe(getScoreDist, []),
@@ -48,6 +48,7 @@ export default async function Page() {
     safe(getTimeSeries, []),
     safe(getProductNegatives, []),
     safe(getProductSummaries, []),
+    safe(getCompetitorSummaries, []),
     safe(getInsightsHistory, []),
     safe(getProductRankingsByMode, rankingsDefault),
     safe(getMarketRankings, []),
@@ -122,6 +123,7 @@ export default async function Page() {
           scoreDist={scoreDist}
           productStats={productStats}
           summaries={summaries}
+          competitorSummaries={competitorSummaries}
           insightsHistory={insightsHistory}
           rankingsByMode={{ best: rankingsData.best, avg: rankingsData.avg, weekly: rankingsData.weekly }}
           rankingsLastCollected={rankingsData.lastCollected}

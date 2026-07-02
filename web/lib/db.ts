@@ -1,5 +1,5 @@
 import { Pool } from 'pg'
-import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, InsightsSnapshot, ProductRankingData, MarketCategoryData, MarketRankingEntry, NewProductData, NegativeAlertData, OurRankingTimelineEntry, PromoStatusData, ProductKeywordData, ProductTopicData, OlivepickMonth, TodayDealHistoryResponse, PromoMonthlyInsight } from './types'
+import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, CompetitorSummary, InsightsSnapshot, ProductRankingData, MarketCategoryData, MarketRankingEntry, NewProductData, NegativeAlertData, OurRankingTimelineEntry, PromoStatusData, ProductKeywordData, ProductTopicData, OlivepickMonth, TodayDealHistoryResponse, PromoMonthlyInsight } from './types'
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -427,12 +427,60 @@ export async function getProductSummaries(): Promise<ProductSummary[]> {
       SELECT ps.goods_no, p.goods_name, ps.summary_json, ps.generated_at
       FROM product_summaries ps
       JOIN products p ON ps.goods_no = p.goods_no
+      WHERE p.is_competitor = false
       ORDER BY p.goods_name
     `)
     return rows.map(r => ({
       goods_no:    r.goods_no,
       goods_name:  r.goods_name,
       generated_at: r.generated_at,
+      ...JSON.parse(r.summary_json),
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function getCompetitorSummaries(): Promise<CompetitorSummary[]> {
+  try {
+    const rows = await query<{
+      goods_no: string; goods_name: string; summary_json: string
+      generated_at: string; review_cnt: string
+    }>(`
+      SELECT ps.goods_no, p.goods_name, ps.summary_json, ps.generated_at,
+             COUNT(r.review_id) AS review_cnt
+      FROM product_summaries ps
+      JOIN products p ON ps.goods_no = p.goods_no
+      LEFT JOIN reviews r ON ps.goods_no = r.goods_no
+      WHERE p.is_competitor = true
+      GROUP BY ps.goods_no, p.goods_name, ps.summary_json, ps.generated_at
+      ORDER BY p.goods_name
+    `)
+    if (rows.length === 0) return []
+
+    const goodsNos = rows.map(r => r.goods_no)
+    const rankRows = await query<{
+      goods_no: string; category_name: string; rank_position: string
+    }>(`
+      SELECT DISTINCT ON (goods_no, category_name) goods_no, category_name, rank_position
+      FROM market_rankings
+      WHERE goods_no = ANY($1)
+        AND rank_date = (SELECT MAX(rank_date) FROM market_rankings)
+      ORDER BY goods_no, category_name, rank_position
+    `, [goodsNos])
+
+    const rankMap: Record<string, { name: string; rank: number }[]> = {}
+    for (const r of rankRows) {
+      if (!rankMap[r.goods_no]) rankMap[r.goods_no] = []
+      rankMap[r.goods_no].push({ name: r.category_name, rank: Number(r.rank_position) })
+    }
+
+    return rows.map(r => ({
+      goods_no: r.goods_no,
+      goods_name: r.goods_name,
+      generated_at: r.generated_at,
+      review_cnt: Number(r.review_cnt),
+      categories: (rankMap[r.goods_no] || []).sort((a, b) => a.rank - b.rank),
       ...JSON.parse(r.summary_json),
     }))
   } catch {

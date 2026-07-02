@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type {
   Insights, TimeSeriesPoint, ProductNegativeData, ScoreDist,
-  ProductStats, ProductSummary, InsightsSnapshot, ProductRankingData,
+  ProductStats, ProductSummary, CompetitorSummary, InsightsSnapshot, ProductRankingData,
   MarketCategoryData, NewProductData, NegativeAlertData,
   OurRankingTimelineEntry, PromoStatusData, ProductKeywordData, ProductTopicData
 } from '@/lib/types'
@@ -13,6 +13,7 @@ import NegativeInsights from '@/components/NegativeInsights'
 import StatsAccordion from '@/components/StatsAccordion'
 import TimeSeriesChart from '@/components/TimeSeriesChart'
 import ProductSummarySection from '@/components/ProductSummarySection'
+import CompetitorSection from '@/components/CompetitorSection'
 import InsightsHistory from '@/components/InsightsHistory'
 import RankingSection from '@/components/RankingSection'
 import MarketRankingSection from '@/components/MarketRankingSection'
@@ -31,6 +32,7 @@ interface Props {
   scoreDist: ScoreDist[]
   productStats: ProductStats[]
   summaries: ProductSummary[]
+  competitorSummaries: CompetitorSummary[]
   insightsHistory: InsightsSnapshot[]
   rankingsByMode: { best: ProductRankingData[]; avg: ProductRankingData[]; weekly: ProductRankingData[] }
   rankingsLastCollected: Record<string, string>
@@ -57,19 +59,20 @@ function renderBold(text: string): React.ReactNode {
 }
 
 const TABS = [
-  { id: 'today',      label: '오늘 현황' },
-  { id: 'reviews',    label: '리뷰 분석' },
-  { id: 'market',     label: '시장 랭킹' },
-  { id: 'olivepick',  label: '올영픽' },
-  { id: 'today_deal', label: '오특' },
-  { id: 'history',    label: '이력' },
+  { id: 'today',       label: '오늘 현황' },
+  { id: 'reviews',     label: '리뷰 분석' },
+  { id: 'market',      label: '시장 랭킹' },
+  { id: 'competitor',  label: '경쟁사 분석' },
+  { id: 'olivepick',   label: '올영픽' },
+  { id: 'today_deal',  label: '오특' },
+  { id: 'history',     label: '이력' },
 ] as const
 
 type TabId = typeof TABS[number]['id']
 
 export default function DashboardTabs({
   insights, timeSeries, negativeData, scoreDist, productStats,
-  summaries, insightsHistory, rankingsByMode, rankingsLastCollected,
+  summaries, competitorSummaries, insightsHistory, rankingsByMode, rankingsLastCollected,
   marketRankings, aiInsight, reviewInsight, dailyBrief,
   newProducts, negativeAlerts, todayTimeline, promoStatus, productKeywords, productTopics
 }: Props) {
@@ -273,6 +276,11 @@ export default function DashboardTabs({
               )
             }
           </div>
+        )}
+
+        {/* 경쟁사 분석 */}
+        {active === 'competitor' && (
+          <CompetitorSection summaries={competitorSummaries} />
         )}
 
         {/* 이력 */}
