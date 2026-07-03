@@ -18,6 +18,7 @@ import InsightsHistory from '@/components/InsightsHistory'
 import RankingSection from '@/components/RankingSection'
 import MarketRankingSection from '@/components/MarketRankingSection'
 import NewProductInsights from '@/components/NewProductInsights'
+import TodayRankingTimeline from '@/components/TodayRankingTimeline'
 import PromoSection from '@/components/PromoSection'
 import ProductKeywordsSection from '@/components/ProductKeywordsSection'
 import SectionDivider from '@/components/SectionDivider'
@@ -154,6 +155,9 @@ export default function DashboardTabs({
             {promoStatus.length > 0 && (
               <PromoSection data={promoStatus} onNavigate={id => setActive(id as TabId)} />
             )}
+
+            {/* 오늘 시간별 순위 타임라인 */}
+            <TodayRankingTimeline data={todayTimeline} />
 
             {/* 셀퓨전씨 자사 순위 */}
             <RankingSection dataByMode={rankingsByMode} lastCollected={rankingsLastCollected} />

@@ -125,44 +125,29 @@ export default function TodayRankingTimeline({ data }: Props) {
                       </div>
 
                       {/* 시간별 스냅샷 */}
-                      {(() => {
-                        const allSame = sorted.every(s => s.rank_position === sorted[0].rank_position)
-                        if (allSame) {
+                      <div className="flex items-end gap-1 flex-wrap">
+                        {sorted.map((snap, i) => {
+                          const prevRank = i > 0 ? sorted[i - 1].rank_position : null
+                          const isImproved = prevRank !== null && snap.rank_position < prevRank
+                          const isWorsened = prevRank !== null && snap.rank_position > prevRank
                           return (
-                            <div className="flex items-center gap-2">
+                            <div key={snap.rank_hour} className="flex flex-col items-center gap-0.5">
                               <span
-                                className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                                style={{ color: rankColor(sorted[0].rank_position), background: `${rankColor(sorted[0].rank_position)}14` }}
+                                className="text-[10px] font-bold leading-none px-1.5 py-0.5 rounded"
+                                style={{
+                                  color: rankColor(snap.rank_position),
+                                  background: `${rankColor(snap.rank_position)}14`,
+                                }}
                               >
-                                {sorted[0].rank_position}위
+                                {snap.rank_position}위
                               </span>
-                              <span className="text-[10px] text-text-tertiary">종일 유지 ({sorted.length}회 확인)</span>
+                              <span className="text-[9px] text-text-tertiary/70 whitespace-nowrap">{fmtHour(snap.rank_hour)}</span>
+                              {isImproved && <span className="text-[8px] text-emerald-500 leading-none">↑</span>}
+                              {isWorsened && <span className="text-[8px] text-red-400 leading-none">↓</span>}
                             </div>
                           )
-                        }
-                        return (
-                          <div className="flex items-end gap-1 flex-wrap">
-                            {sorted.map((snap, i) => {
-                              const prevRank = i > 0 ? sorted[i - 1].rank_position : null
-                              const isImproved = prevRank !== null && snap.rank_position < prevRank
-                              const isWorsened = prevRank !== null && snap.rank_position > prevRank
-                              return (
-                                <div key={snap.rank_hour} className="flex flex-col items-center gap-0.5">
-                                  <span
-                                    className="text-[10px] font-bold leading-none px-1.5 py-0.5 rounded"
-                                    style={{ color: rankColor(snap.rank_position), background: `${rankColor(snap.rank_position)}14` }}
-                                  >
-                                    {snap.rank_position}위
-                                  </span>
-                                  <span className="text-[9px] text-text-tertiary/70 whitespace-nowrap">{fmtHour(snap.rank_hour)}</span>
-                                  {isImproved && <span className="text-[8px] text-emerald-500 leading-none">↑</span>}
-                                  {isWorsened && <span className="text-[8px] text-red-400 leading-none">↓</span>}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )
-                      })()}
+                        })}
+                      </div>
                     </div>
                   )
                 })}
