@@ -290,16 +290,23 @@ def upsert_products(products: list[dict], conn=None):
             c.commit()
 
 
+def _strip_nul(s) -> str:
+    """PostgreSQL은 NUL(0x00) 문자를 허용하지 않음."""
+    if isinstance(s, str):
+        return s.replace('\x00', '')
+    return s
+
+
 def insert_review(review: dict, goods_no: str, conn=None):
     profile = review.get("profileDto") or {}
     trouble = json.dumps(profile.get("skinTrouble", []), ensure_ascii=False)
     params = (
         review["reviewId"],
         goods_no,
-        review.get("content", ""),
+        _strip_nul(review.get("content", "")),
         review.get("reviewScore"),
-        profile.get("skinType"),
-        trouble,
+        _strip_nul(profile.get("skinType")),
+        _strip_nul(trouble),
         review.get("isRepurchase", False),
         review.get("createdDateTime"),
     )
