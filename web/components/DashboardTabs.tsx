@@ -18,7 +18,6 @@ import InsightsHistory from '@/components/InsightsHistory'
 import RankingSection from '@/components/RankingSection'
 import MarketRankingSection from '@/components/MarketRankingSection'
 import NewProductInsights from '@/components/NewProductInsights'
-import TodayRankingTimeline from '@/components/TodayRankingTimeline'
 import PromoSection from '@/components/PromoSection'
 import ProductKeywordsSection from '@/components/ProductKeywordsSection'
 import SectionDivider from '@/components/SectionDivider'
@@ -105,44 +104,26 @@ export default function DashboardTabs({
         {active === 'today' && (
           <div className="space-y-10">
             {/* 오늘의 통합 브리핑 */}
-            {dailyBrief && (() => {
-              const latestHour = todayTimeline.length > 0
-                ? Math.max(...todayTimeline.map(e => e.rank_hour)) : null
-              const latestRanks = latestHour != null
-                ? todayTimeline.filter(e => e.rank_hour === latestHour) : []
-              return (
-                <div>
-                  <SectionDivider tag="오늘 브리핑" />
-                  <div className="bg-accent-bg border border-accent-border rounded-lg px-4 py-4">
-                    <p className="text-xs font-semibold text-accent mb-3">오늘의 핵심 브리핑 — 랭킹 + 리뷰 종합</p>
-                    <ul className="space-y-2">
-                      {dailyBrief
-                        .split('\n')
-                        .map(l => l.replace(/^\[.*?\]\s*/, '').replace(/^#+\s*/, '').replace(/^[\s\-·•*\d.]+/, '').trim())
-                        .filter(l => l.length > 10)
-                        .map((msg, i) => (
-                          <li key={i} className="text-sm text-accent-fg flex items-start gap-2">
-                            <span className="text-accent shrink-0 mt-0.5 font-bold text-base leading-none">·</span>
-                            <span className="leading-snug">{renderBold(msg)}</span>
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                  {/* C-1: 자사 현재 순위 요약 칩 */}
-                  {latestRanks.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {latestRanks.map((e, i) => (
-                        <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-accent-border bg-accent-bg text-xs">
-                          <span className="text-text-secondary">{e.category_name}</span>
-                          <span className="font-semibold text-accent">{e.rank_position}위</span>
-                        </span>
+            {dailyBrief && (
+              <div>
+                <SectionDivider tag="오늘 브리핑" />
+                <div className="bg-accent-bg border border-accent-border rounded-lg px-4 py-4">
+                  <p className="text-xs font-semibold text-accent mb-3">오늘의 핵심 브리핑 — 랭킹 + 리뷰 종합</p>
+                  <ul className="space-y-2">
+                    {dailyBrief
+                      .split('\n')
+                      .map(l => l.replace(/^\[.*?\]\s*/, '').replace(/^#+\s*/, '').replace(/^[\s\-·•*\d.]+/, '').trim())
+                      .filter(l => l.length > 10)
+                      .map((msg, i) => (
+                        <li key={i} className="text-sm text-accent-fg flex items-start gap-2">
+                          <span className="text-accent shrink-0 mt-0.5 font-bold text-base leading-none">·</span>
+                          <span className="leading-snug">{renderBold(msg)}</span>
+                        </li>
                       ))}
-                      <span className="text-xs text-text-tertiary self-center">{latestHour}시 기준</span>
-                    </div>
-                  )}
+                  </ul>
                 </div>
-              )
-            })()}
+              </div>
+            )}
 
             {/* ⚠️ 긴급 알람 — 부정 급증 */}
             {negativeAlerts.length > 0 && (
@@ -173,9 +154,6 @@ export default function DashboardTabs({
             {promoStatus.length > 0 && (
               <PromoSection data={promoStatus} onNavigate={id => setActive(id as TabId)} />
             )}
-
-            {/* 오늘 시간별 순위 타임라인 (A-4: 항상 렌더, 빈 상태는 내부 처리) */}
-            <TodayRankingTimeline data={todayTimeline} />
 
             {/* 셀퓨전씨 자사 순위 */}
             <RankingSection dataByMode={rankingsByMode} lastCollected={rankingsLastCollected} />
