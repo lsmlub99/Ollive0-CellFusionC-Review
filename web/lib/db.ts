@@ -506,6 +506,7 @@ export async function getProductRankingsByMode(): Promise<{
       FROM market_rankings mr
       JOIN products p ON mr.goods_no = p.goods_no
       WHERE mr.rank_date >= CURRENT_DATE - INTERVAL '30 days'
+        AND p.is_competitor = false
       GROUP BY mr.rank_date, mr.goods_no, p.goods_name, mr.category_name
       ORDER BY mr.category_name, mr.goods_no, mr.rank_date
     `)
@@ -520,6 +521,7 @@ export async function getProductRankingsByMode(): Promise<{
       FROM market_rankings mr
       JOIN products p ON mr.goods_no = p.goods_no
       WHERE mr.rank_date >= CURRENT_DATE - INTERVAL '30 days'
+        AND p.is_competitor = false
       GROUP BY DATE_TRUNC('week', mr.rank_date), mr.goods_no, p.goods_name, mr.category_name
       ORDER BY mr.category_name, mr.goods_no, date
     `)
@@ -723,6 +725,7 @@ export async function getNewProducts(withinDays = 30): Promise<NewProductData[]>
       SELECT goods_no, goods_name, first_seen::text
       FROM products
       WHERE first_seen >= CURRENT_DATE - $1::int
+        AND is_competitor = false
       ORDER BY first_seen DESC
     `, [withinDays])
 
@@ -803,6 +806,7 @@ export async function getOurRankingTimeline(): Promise<OurRankingTimelineEntry[]
       FROM market_rankings mr
       JOIN products p ON mr.goods_no = p.goods_no
       WHERE mr.rank_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
+        AND p.is_competitor = false
       ORDER BY mr.goods_no, mr.category_name, mr.rank_hour
     `)
   } catch {
@@ -880,7 +884,7 @@ export async function getNegativeAlerts(): Promise<NegativeAlertData[]> {
           AND r.created_at <  to_char(CURRENT_DATE - 7,  'YYYY-MM-DD')) AS prev_neg
       FROM reviews r
       JOIN products p ON r.goods_no = p.goods_no
-      WHERE r.content IS NOT NULL
+      WHERE r.content IS NOT NULL AND p.is_competitor = false
       GROUP BY p.goods_no, p.goods_name
       HAVING COUNT(*) FILTER (WHERE r.score <= 2 AND r.created_at >= to_char(CURRENT_DATE - 7, 'YYYY-MM-DD')) >= 3
     `)
@@ -951,6 +955,7 @@ export async function getProductKeywords(): Promise<ProductKeywordData[]> {
       FROM reviews r
       JOIN products p ON r.goods_no = p.goods_no
       WHERE r.content IS NOT NULL AND r.content != ''
+        AND p.is_competitor = false
       GROUP BY r.goods_no, p.goods_name
       ORDER BY review_cnt DESC LIMIT 8
     `)
@@ -1183,6 +1188,7 @@ export async function getProductTopicInsights(): Promise<ProductTopicData[]> {
       FROM reviews r
       JOIN products p ON r.goods_no = p.goods_no
       WHERE r.content IS NOT NULL AND r.content != ''
+        AND p.is_competitor = false
       GROUP BY r.goods_no, p.goods_name
       ORDER BY COUNT(*) DESC LIMIT 5
     `)

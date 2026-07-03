@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { CompetitorSummary } from '@/lib/types'
@@ -33,11 +33,11 @@ function CompetitorCard({ s }: { s: CompetitorSummary }) {
             {bestRank && (
               <span className="text-xs text-red-500 font-semibold">{bestRank.name} {bestRank.rank}위</span>
             )}
-            {s.categories.slice(1).map(c => (
+            {s.categories.filter(c => c !== bestRank).slice(0, 2).map(c => (
               <span key={c.name} className="text-xs text-text-tertiary">{c.name} {c.rank}위</span>
             ))}
             {s.review_cnt > 0 && (
-              <span className="text-2xs text-text-tertiary/60">리뷰 {s.review_cnt}개 분석</span>
+              <span className="text-2xs text-text-tertiary/60">리뷰 {s.review_cnt}개</span>
             )}
           </div>
         </div>
@@ -98,6 +98,23 @@ function CompetitorCard({ s }: { s: CompetitorSummary }) {
 }
 
 export default function CompetitorSection({ summaries }: Props) {
+  const categories = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of summaries) {
+      for (const c of s.categories) set.add(c.name)
+    }
+    return ['전체', ...Array.from(set).sort()]
+  }, [summaries])
+
+  const [activeCategory, setActiveCategory] = useState('전체')
+
+  const filtered = useMemo(() =>
+    activeCategory === '전체'
+      ? summaries
+      : summaries.filter(s => s.categories.some(c => c.name === activeCategory)),
+    [summaries, activeCategory]
+  )
+
   return (
     <div className="space-y-4">
       <div className="mb-5">
@@ -124,11 +141,43 @@ export default function CompetitorSection({ summaries }: Props) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {summaries.map(s => (
-            <CompetitorCard key={s.goods_no} s={s} />
-          ))}
-        </div>
+        <>
+          {/* 카테고리 필터 */}
+          {categories.length > 2 && (
+            <div className="flex flex-wrap gap-2">
+              {categories.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    activeCategory === cat
+                      ? 'bg-accent text-white'
+                      : 'bg-surface border border-border text-text-secondary hover:border-accent/50'
+                  }`}
+                >
+                  {cat}
+                  {cat !== '전체' && (
+                    <span className="ml-1 opacity-60">
+                      {summaries.filter(s => s.categories.some(c => c.name === cat)).length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {filtered.map(s => (
+              <CompetitorCard key={s.goods_no} s={s} />
+            ))}
+          </div>
+
+          {filtered.length === 0 && (
+            <p className="text-sm text-text-tertiary text-center py-8">
+              해당 카테고리 분석 데이터가 없어요
+            </p>
+          )}
+        </>
       )}
     </div>
   )
