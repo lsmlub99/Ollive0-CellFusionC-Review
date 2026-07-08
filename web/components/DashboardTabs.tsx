@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import type {
   Insights, TimeSeriesPoint, ProductNegativeData, ScoreDist,
   ProductStats, ProductSummary, CompetitorSummary, InsightsSnapshot, ProductRankingData,
@@ -24,6 +24,8 @@ import ProductKeywordsSection from '@/components/ProductKeywordsSection'
 import SectionDivider from '@/components/SectionDivider'
 import OlivepickTab from '@/components/OlivepickTab'
 import TodayDealTab from '@/components/TodayDealTab'
+import ActionLogWidget from '@/components/ActionLogWidget'
+import BrandTimeline from '@/components/BrandTimeline'
 
 interface Props {
   insights: Insights
@@ -77,26 +79,55 @@ export default function DashboardTabs({
   newProducts, negativeAlerts, todayTimeline, promoStatus, productKeywords, productTopics
 }: Props) {
   const [active, setActive] = useState<TabId>('today')
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshed, setRefreshed] = useState(false)
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await fetch('/api/revalidate', { method: 'POST' })
+      setRefreshed(true)
+      setTimeout(() => { setRefreshed(false); window.location.reload() }, 800)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refreshing])
 
   return (
     <div className="space-y-8">
       {/* 탭 바 */}
       <div className="border-b border-border sticky top-14 z-30 bg-background/95 backdrop-blur-sm">
-        <nav className="flex gap-0 -mb-px">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActive(tab.id)}
-              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
-                active === tab.id
-                  ? 'border-accent text-text-primary'
-                  : 'border-transparent text-text-tertiary hover:text-text-secondary'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+        <div className="flex items-center justify-between -mb-px">
+          <nav className="flex gap-0">
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActive(tab.id)}
+                className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                  active === tab.id
+                    ? 'border-accent text-text-primary'
+                    : 'border-transparent text-text-tertiary hover:text-text-secondary'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="캐시 초기화 후 새로고침"
+            className={`mr-2 flex items-center gap-1 px-2.5 py-1 rounded text-xs border transition-colors ${
+              refreshed
+                ? 'text-green-600 border-green-200 bg-green-50'
+                : 'text-text-tertiary border-border hover:text-text-secondary hover:border-text-tertiary'
+            } disabled:opacity-40`}
+          >
+            <span className={`text-sm leading-none ${refreshing ? 'animate-spin' : ''}`}>↺</span>
+            {refreshed ? '완료' : '새로고침'}
+          </button>
+        </div>
       </div>
 
       {/* 탭 콘텐츠 */}
@@ -126,29 +157,24 @@ export default function DashboardTabs({
               </div>
             )}
 
-            {/* ⚠️ 긴급 알람 — 부정 급증 */}
+            {/* ⚠️ 부정 리뷰 급증 — 컴팩트 알림 (상세는 리뷰 분석 탭) */}
             {negativeAlerts.length > 0 && (
-              <div>
-                <SectionDivider tag="⚠️ 긴급 알람" />
-                <div className="space-y-2">
-                  {negativeAlerts.map(a => (
-                    <div key={a.goods_no} className="flex items-start gap-3 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3.5">
-                      <span className="text-red-600 font-black text-lg shrink-0 mt-0.5 leading-none">!</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-red-700">{a.goods_name}</p>
-                        <p className="text-sm text-red-600 font-medium mt-0.5">
-                          최근 7일 부정 리뷰 {a.recent_neg}건
-                          {a.prev_neg > 0 && ` · 전주 대비 +${a.increase_pct}%`}
-                          {a.top_keywords.length > 0 && ` · 주요 키워드: ${a.top_keywords.map(k => k.word).join(', ')}`}
-                        </p>
-                        {a.sample && (
-                          <p className="text-xs text-red-500 mt-1.5 truncate italic">"{a.sample}"</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+              <button
+                type="button"
+                onClick={() => setActive('reviews')}
+                className="w-full flex items-center gap-3 bg-red-50 border-2 border-red-300 rounded-lg px-4 py-3 hover:bg-red-100 transition-colors text-left"
+              >
+                <span className="text-red-600 font-black text-lg shrink-0 leading-none">!</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-red-700">
+                    부정 리뷰 급증 {negativeAlerts.length}개 상품 감지
+                  </p>
+                  <p className="text-xs text-red-600 mt-0.5 truncate">
+                    {negativeAlerts.map(a => a.goods_name).join(' · ')}
+                  </p>
                 </div>
-              </div>
+                <span className="text-xs text-red-500 font-medium shrink-0 whitespace-nowrap">리뷰 분석에서 보기 →</span>
+              </button>
             )}
 
             {/* 프로모션 입점 현황 */}
@@ -262,7 +288,17 @@ export default function DashboardTabs({
 
         {/* 경쟁사 분석 */}
         {active === 'competitor' && (
-          <CompetitorSection summaries={competitorSummaries} />
+          <div className="space-y-10">
+            <CompetitorSection summaries={competitorSummaries} />
+            <div>
+              <SectionDivider tag="브랜드 타임라인" />
+              <div className="mb-3">
+                <h2 className="text-xl font-semibold text-text-primary">브랜드 이벤트 타임라인</h2>
+                <p className="text-sm text-text-tertiary mt-0.5">올영픽 입점·이탈, 순위 급등, 리뷰 급증 등 자동 감지</p>
+              </div>
+              <BrandTimeline />
+            </div>
+          </div>
         )}
 
         {/* 이력 */}
@@ -276,6 +312,9 @@ export default function DashboardTabs({
         {/* 오특 */}
         {active === 'today_deal' && <TodayDealTab />}
       </div>
+
+      {/* 실행 기록 플로팅 버튼 */}
+      <ActionLogWidget />
     </div>
   )
 }

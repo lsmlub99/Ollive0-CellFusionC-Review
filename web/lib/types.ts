@@ -106,6 +106,9 @@ export interface ProductSummary {
 export interface CompetitorSummary extends ProductSummary {
   categories: { name: string; rank: number }[]
   review_cnt: number
+  price: number | null
+  volume: string | null
+  bundle_info: string | null
 }
 
 export interface ProductRankingData {
@@ -264,4 +267,33 @@ export interface InsightsSnapshot {
   five_star_pct: number
   positive_keywords: { word: string; cnt: number }[]
   negative_keywords: { word: string; cnt: number }[]
+}
+
+export interface BrandEvent {
+  id: number
+  event_date: string
+  event_type: 'olivepick_entry' | 'olivepick_exit' | 'rank_jump' | 'review_surge' | 'new_product' | 'price_drop' | 'action_taken'
+  brand_name: string | null
+  goods_no: string | null
+  category_name: string | null
+  event_detail: Record<string, unknown>
+  source: 'auto' | 'user'
+  detected_at: string
+}
+
+export interface PriceHistoryPoint {
+  recorded_date: string
+  price: number
+}
+
+export interface RepurchaseTrendPoint {
+  month: string
+  repurchase_pct: number
+  total_reviews: number
+}
+
+export interface OlivepickRankTrendPoint {
+  month: string
+  rank_position: number
+  category_name: string | null
 }

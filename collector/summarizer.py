@@ -8,10 +8,10 @@ from dotenv import load_dotenv
 load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from anthropic import Anthropic
+from openai import OpenAI
 from db.schema import get_conn, init_db, get_all_products, get_competitor_products
 
-client = Anthropic()  # reads ANTHROPIC_API_KEY from env
+client = OpenAI()  # reads OPENAI_API_KEY from env
 
 PROMPT = """다음은 올리브영 '{name}' 제품의 실구매 리뷰 {n}개입니다.
 
@@ -44,14 +44,14 @@ def summarize_product(goods_name: str, reviews: list[dict]) -> dict:
         f"[{r['score']}★] {str(r['content'] or '').replace(chr(10), ' ')[:200]}"
         for r in sampled
     )
-    msg = client.messages.create(
-        model="claude-haiku-4-5-20251001",
+    msg = client.chat.completions.create(
+        model="gpt-4o-mini",
         max_tokens=800,
         messages=[{"role": "user", "content": PROMPT.format(
             name=goods_name, n=len(sampled), reviews=review_text
         )}]
     )
-    text = msg.content[0].text.strip()
+    text = msg.choices[0].message.content.strip()
     if '```' in text:
         text = text.split('```')[1]
         if text.startswith('json'):
@@ -95,6 +95,12 @@ def run(mode: str = "ours"):
             if len(reviews) < 10:
                 print(f"  ({i+1}/{len(products)}) {goods_name[:30]} -리뷰 부족 ({len(reviews)}개) 스킵")
                 continue
+
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM product_summaries WHERE goods_no = %s", (goods_no,))
+                if cur.fetchone():
+                    print(f"  ({i+1}/{len(products)}) {goods_name[:30]} -이미 완료, 스킵")
+                    continue
 
             print(f"  ({i+1}/{len(products)}) {goods_name[:30]} -{len(reviews)}개 리뷰 요약 중...")
             try:

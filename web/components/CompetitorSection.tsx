@@ -50,6 +50,25 @@ function ProductCard({ s }: { s: CompetitorSummary }) {
               <span className="text-[10px] text-text-tertiary/60">리뷰 {s.review_cnt}개</span>
             )}
           </div>
+          {(s.price || s.volume || s.bundle_info) && (
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {s.price && (
+                <span className="text-[10px] font-medium bg-muted border border-border text-text-secondary px-1.5 py-0.5 rounded">
+                  {s.price.toLocaleString()}원
+                </span>
+              )}
+              {s.volume && (
+                <span className="text-[10px] font-medium bg-muted border border-border text-text-secondary px-1.5 py-0.5 rounded">
+                  {s.volume}
+                </span>
+              )}
+              {s.bundle_info && (
+                <span className="text-[10px] font-medium bg-amber-50 border border-amber-200 text-amber-700 px-1.5 py-0.5 rounded truncate max-w-[180px]" title={s.bundle_info}>
+                  {s.bundle_info}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <ChevronDown
           size={14}

@@ -110,6 +110,7 @@ def _save_ranking(conn, cur, rank_date, rank_hour, cat_name: str, ranking: list[
                 print(f"  변화 없음 — 저장 스킵")
             return 0
 
+        price_updates = 0
         for rank, item in enumerate(ranking, 1):
             c.execute("""
                 INSERT INTO market_rankings (rank_date, rank_hour, category_name, rank_position, goods_no, goods_name)
@@ -117,6 +118,16 @@ def _save_ranking(conn, cur, rank_date, rank_hour, cat_name: str, ranking: list[
                 ON CONFLICT (rank_date, rank_hour, category_name, rank_position)
                 DO UPDATE SET goods_no = EXCLUDED.goods_no, goods_name = EXCLUDED.goods_name
             """, (rank_date, rank_hour, cat_name, rank, item['goods_no'], item['name']))
+
+            # 랭킹 페이지에서 파싱된 가격 → products 테이블 업데이트 (NULL인 경우만 덮어쓰지 않음)
+            if item.get('price'):
+                c.execute("""
+                    UPDATE products
+                    SET price = %s, detail_fetched_at = COALESCE(detail_fetched_at, CURRENT_DATE)
+                    WHERE goods_no = %s AND (price IS NULL OR price != %s)
+                """, (item['price'], item['goods_no'], item['price']))
+                if c.rowcount > 0:
+                    price_updates += 1
 
         for rank, item in hits:
             c.execute("""
@@ -126,7 +137,7 @@ def _save_ranking(conn, cur, rank_date, rank_hour, cat_name: str, ranking: list[
                 DO UPDATE SET rank_position = EXCLUDED.rank_position
             """, (rank_date, item['goods_no'], cat_name, rank))
 
-    print(f"  전체 {len(ranking)}개 저장", end='')
+    print(f"  전체 {len(ranking)}개 저장 (가격 {price_updates}개 업데이트)", end='')
     if hits:
         print(f"  |  자사: " + ", ".join(f"{r}위 {it['goods_no']}" for r, it in hits))
     else:
@@ -219,7 +230,23 @@ def fetch_ranking(disp_cat: str, flt_cat: str | None) -> list[dict]:
                 seen.add(goods_no)
                 name_el = item.select_one('.tx_name, .prd_name, strong.tx_name, .name')
                 name = name_el.get_text(strip=True) if name_el else ''
-                results.append({'goods_no': goods_no, 'name': name})
+
+                # 소비자가 추출 (원가 우선 → 판매가 fallback)
+                price = None
+                price_el = item.select_one('.prd_price, [class*="price"]')
+                if price_el:
+                    # 할인 전 원가 (del 또는 tx_del)
+                    before_el = price_el.select_one('del, .tx_del, [class*="before"]')
+                    sale_el   = price_el.select_one('strong.tx_num, .tx_num:not(.tx_del), [class*="sale"]')
+                    target_el = before_el or sale_el
+                    if target_el:
+                        pm = re.search(r'[\d,]+', target_el.get_text(strip=True).replace(' ', ''))
+                        if pm:
+                            v = int(pm.group().replace(',', ''))
+                            if 1000 <= v <= 500000:
+                                price = v
+
+                results.append({'goods_no': goods_no, 'name': name, 'price': price})
             return results
         except ValueError:
             raise

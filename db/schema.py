@@ -69,6 +69,13 @@ def init_db(conn=None):
                     ADD COLUMN IF NOT EXISTS is_competitor BOOLEAN NOT NULL DEFAULT false
             """)
             cur.execute("""
+                ALTER TABLE products
+                    ADD COLUMN IF NOT EXISTS price INTEGER,
+                    ADD COLUMN IF NOT EXISTS volume TEXT,
+                    ADD COLUMN IF NOT EXISTS bundle_info TEXT,
+                    ADD COLUMN IF NOT EXISTS detail_fetched_at DATE
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS reviews (
                     review_id     BIGINT PRIMARY KEY,
                     goods_no      TEXT REFERENCES products(goods_no),
@@ -255,6 +262,44 @@ def init_db(conn=None):
                     UNIQUE (goods_no, insight_date)
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS price_history (
+                    id            SERIAL PRIMARY KEY,
+                    goods_no      TEXT NOT NULL,
+                    price         INT NOT NULL,
+                    recorded_date DATE NOT NULL DEFAULT CURRENT_DATE,
+                    UNIQUE(goods_no, recorded_date)
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_price_history_goods
+                    ON price_history(goods_no, recorded_date DESC)
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS brand_events (
+                    id           SERIAL PRIMARY KEY,
+                    event_date   DATE NOT NULL,
+                    event_type   VARCHAR(50) NOT NULL,
+                    brand_name   TEXT,
+                    goods_no     TEXT,
+                    category_name TEXT,
+                    event_detail JSONB,
+                    source       VARCHAR(20) NOT NULL DEFAULT 'auto',
+                    detected_at  TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_brand_events_date
+                    ON brand_events(event_date DESC)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_brand_events_brand
+                    ON brand_events(brand_name, event_date DESC)
+            """)
+            cur.execute("""
+                ALTER TABLE reviews
+                    ADD COLUMN IF NOT EXISTS has_photo BOOLEAN NOT NULL DEFAULT false
+            """)
 
     if conn is not None:
         _run(conn)
@@ -300,6 +345,7 @@ def _strip_nul(s) -> str:
 def insert_review(review: dict, goods_no: str, conn=None):
     profile = review.get("profileDto") or {}
     trouble = json.dumps(profile.get("skinTrouble", []), ensure_ascii=False)
+    has_photo = bool(review.get("imageList")) or bool(review.get("photoReviewYn"))
     params = (
         review["reviewId"],
         goods_no,
@@ -309,11 +355,12 @@ def insert_review(review: dict, goods_no: str, conn=None):
         _strip_nul(trouble),
         review.get("isRepurchase", False),
         review.get("createdDateTime"),
+        has_photo,
     )
     sql = """
         INSERT INTO reviews
-            (review_id, goods_no, content, score, skin_type, skin_trouble, is_repurchase, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (review_id, goods_no, content, score, skin_type, skin_trouble, is_repurchase, created_at, has_photo)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT DO NOTHING
     """
     if conn is not None:

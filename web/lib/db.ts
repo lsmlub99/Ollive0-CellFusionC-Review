@@ -1,5 +1,5 @@
 import { Pool } from 'pg'
-import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, CompetitorSummary, InsightsSnapshot, ProductRankingData, MarketCategoryData, MarketRankingEntry, NewProductData, NegativeAlertData, OurRankingTimelineEntry, PromoStatusData, ProductKeywordData, ProductTopicData, OlivepickMonth, TodayDealHistoryResponse, PromoMonthlyInsight } from './types'
+import type { Stats, Product, Review, Insights, ProductStats, ScoreDist, ReviewsResponse, FilterType, TimeSeriesPoint, ProductNegativeData, ProductSummary, CompetitorSummary, InsightsSnapshot, ProductRankingData, MarketCategoryData, MarketRankingEntry, NewProductData, NegativeAlertData, OurRankingTimelineEntry, PromoStatusData, ProductKeywordData, ProductTopicData, OlivepickMonth, TodayDealHistoryResponse, PromoMonthlyInsight, BrandEvent, PriceHistoryPoint, RepurchaseTrendPoint, OlivepickRankTrendPoint } from './types'
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -446,14 +446,17 @@ export async function getCompetitorSummaries(): Promise<CompetitorSummary[]> {
     const rows = await query<{
       goods_no: string; goods_name: string; summary_json: string
       generated_at: string; review_cnt: string
+      price: number | null; volume: string | null; bundle_info: string | null
     }>(`
       SELECT ps.goods_no, p.goods_name, ps.summary_json, ps.generated_at,
-             COUNT(r.review_id) AS review_cnt
+             COUNT(r.review_id) AS review_cnt,
+             p.price, p.volume, p.bundle_info
       FROM product_summaries ps
       JOIN products p ON ps.goods_no = p.goods_no
       LEFT JOIN reviews r ON ps.goods_no = r.goods_no
       WHERE p.is_competitor = true
-      GROUP BY ps.goods_no, p.goods_name, ps.summary_json, ps.generated_at
+      GROUP BY ps.goods_no, p.goods_name, ps.summary_json, ps.generated_at,
+               p.price, p.volume, p.bundle_info
       ORDER BY p.goods_name
     `)
     if (rows.length === 0) return []
@@ -481,6 +484,9 @@ export async function getCompetitorSummaries(): Promise<CompetitorSummary[]> {
       generated_at: r.generated_at,
       review_cnt: Number(r.review_cnt),
       categories: (rankMap[r.goods_no] || []).sort((a, b) => a.rank - b.rank),
+      price: r.price ?? null,
+      volume: r.volume ?? null,
+      bundle_info: r.bundle_info ?? null,
       ...JSON.parse(r.summary_json),
     }))
   } catch {
@@ -806,6 +812,7 @@ export async function getOurRankingTimeline(): Promise<OurRankingTimelineEntry[]
       FROM market_rankings mr
       JOIN products p ON mr.goods_no = p.goods_no
       WHERE mr.rank_date = (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
+        AND mr.rank_hour <= EXTRACT(HOUR FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'))::int
         AND p.is_competitor = false
         AND mr.category_name NOT IN ('선스틱', '선세럼·미스트')
       ORDER BY mr.goods_no, mr.category_name, mr.rank_hour
@@ -1238,6 +1245,107 @@ export async function getProductTopicInsights(): Promise<ProductTopicData[]> {
   } catch {
     return []
   }
+}
+
+// ─────────────────────────────────────────
+// 브랜드 이벤트 / 실행 회고
+// ─────────────────────────────────────────
+
+export async function getBrandEvents(brandName?: string, limit = 50): Promise<BrandEvent[]> {
+  try {
+    const rows = await query<BrandEvent>(
+      brandName
+        ? `SELECT id, event_date::text, event_type, brand_name, goods_no, category_name,
+                  event_detail, source, detected_at::text
+           FROM brand_events
+           WHERE brand_name = $1
+           ORDER BY event_date DESC LIMIT $2`
+        : `SELECT id, event_date::text, event_type, brand_name, goods_no, category_name,
+                  event_detail, source, detected_at::text
+           FROM brand_events
+           ORDER BY event_date DESC LIMIT $1`,
+      brandName ? [brandName, limit] : [limit]
+    )
+    return rows
+  } catch { return [] }
+}
+
+export async function getBrandNames(): Promise<string[]> {
+  try {
+    const rows = await query<{ brand_name: string }>(`
+      SELECT DISTINCT brand_name FROM brand_events
+      WHERE brand_name IS NOT NULL
+      ORDER BY brand_name
+    `)
+    return rows.map(r => r.brand_name)
+  } catch { return [] }
+}
+
+export async function saveBrandEvent(event: Omit<BrandEvent, 'id' | 'detected_at'>): Promise<void> {
+  await query(`
+    INSERT INTO brand_events
+      (event_date, event_type, brand_name, goods_no, category_name, event_detail, source)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [
+    event.event_date, event.event_type, event.brand_name, event.goods_no,
+    event.category_name, JSON.stringify(event.event_detail), event.source,
+  ])
+}
+
+// ─────────────────────────────────────────
+// 가격 이력
+// ─────────────────────────────────────────
+
+export async function getPriceHistory(goodsNo: string, days = 90): Promise<PriceHistoryPoint[]> {
+  try {
+    return await query<PriceHistoryPoint>(`
+      SELECT recorded_date::text, price
+      FROM price_history
+      WHERE goods_no = $1 AND recorded_date >= CURRENT_DATE - $2
+      ORDER BY recorded_date ASC
+    `, [goodsNo, days])
+  } catch { return [] }
+}
+
+// ─────────────────────────────────────────
+// 재구매율 트렌드
+// ─────────────────────────────────────────
+
+export async function getRepurchaseTrend(months = 12): Promise<RepurchaseTrendPoint[]> {
+  try {
+    return await query<RepurchaseTrendPoint>(`
+      SELECT
+        TO_CHAR(TO_DATE(created_at, 'YYYY-MM-DD'), 'YYYY.MM') AS month,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE is_repurchase = true) / COUNT(*), 1) AS repurchase_pct,
+        COUNT(*)::int AS total_reviews
+      FROM reviews r
+      JOIN products p ON r.goods_no = p.goods_no
+      WHERE p.is_competitor = false
+        AND created_at ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        AND TO_DATE(created_at, 'YYYY-MM-DD') >= CURRENT_DATE - ($1 * 31)
+      GROUP BY 1
+      ORDER BY 1
+    `, [months])
+  } catch { return [] }
+}
+
+// ─────────────────────────────────────────
+// 올영픽 순위 트렌드
+// ─────────────────────────────────────────
+
+export async function getOlivepickRankTrend(goodsNo: string): Promise<OlivepickRankTrendPoint[]> {
+  try {
+    return await query<OlivepickRankTrendPoint>(`
+      SELECT
+        TO_CHAR(collected_at, 'YYYY.MM') AS month,
+        MIN(rank_position)::int AS rank_position,
+        MAX(category_name) AS category_name
+      FROM promo_items
+      WHERE goods_no = $1 AND promo_type = 'olivepick'
+      GROUP BY 1
+      ORDER BY 1
+    `, [goodsNo])
+  } catch { return [] }
 }
 
 // ─────────────────────────────────────────

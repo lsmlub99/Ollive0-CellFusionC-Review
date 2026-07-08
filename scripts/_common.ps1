@@ -8,13 +8,13 @@ $env:PYTHONIOENCODING = "utf-8"
 
 function Get-Webhook {
     $line = Get-Content "$REPO\.env" -Encoding UTF8 |
-            Where-Object { $_ -match "^SWIT_WEBHOOK_URL\s*=" } |
+            Where-Object { $_ -match "^SLACK_WEBHOOK_URL\s*=" } |
             Select-Object -First 1
     if ($line) { return ($line -split "=", 2)[1].Trim() }
     return ""
 }
 
-function Send-Swit([string]$text) {
+function Send-Slack([string]$text) {
     $url = Get-Webhook
     if (-not $url) { return }
     try {
@@ -90,11 +90,11 @@ function Invoke-Collector([string]$module, [string]$label, [int]$timeoutMin = 20
         $errLine = (Get-Content $logFile -Encoding UTF8) |
             Where-Object { $_ -match 'Error:|Exception:|FAILED' -and $_ -notmatch '^\s+File ' } |
             Select-Object -Last 1
-        Send-Swit "❌❌❌ [OY] $label 실패❌❌❌`n$end`n$errLine"
+        Send-Slack "❌❌❌ [OY] $label 실패❌❌❌`n$end`n$errLine"
     } else {
         "[$end] OK" | Out-File -Append -Encoding UTF8 $logFile
         $summary = Get-Summary $outLines
-        Send-Swit "[OY] OK  $label 완료 | $end`n$('=' * 20)`n$summary"
+        Send-Slack "[OY] OK  $label 완료 | $end`n$('=' * 20)`n$summary"
     }
 
     Get-ChildItem $LOG_DIR -Filter "*.log" |
