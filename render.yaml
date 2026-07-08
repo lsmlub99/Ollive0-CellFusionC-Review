@@ -9,3 +9,20 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.0
+
+  - type: worker
+    name: oliveyoung-slack-bot
+    runtime: python
+    buildCommand: pip install -r slack-bot/requirements.txt
+    startCommand: python slack-bot/bot.py
+    envVars:
+      - key: SLACK_BOT_TOKEN
+        sync: false
+      - key: SLACK_APP_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MCP_SERVER_URL
+        value: https://oliveyoung-review.vercel.app/api/mcp
+      - key: PYTHON_VERSION
+        value: 3.11.0
