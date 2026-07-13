@@ -56,7 +56,7 @@ export default function ActionLogWidget() {
       {/* 플로팅 버튼 */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-accent text-white rounded-full px-4 py-2.5 shadow-lg hover:brightness-110 transition text-sm font-medium"
+        className="fixed bottom-24 right-6 z-50 flex items-center gap-2 bg-accent text-white rounded-full px-4 py-2.5 shadow-lg hover:brightness-110 transition text-sm font-medium"
         title="실행 기록 남기기"
       >
         <span className="text-base leading-none">+</span>
