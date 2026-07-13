@@ -218,6 +218,13 @@ export default function CompetitorSection({ summaries, insights = [] }: Props) {
         </p>
       </div>
 
+      {/* 키워드 비교 분석 — 브랜드 목록보다 먼저 표시 */}
+      {insights.length > 0 && (
+        <div className="mb-8">
+          <CompetitorKeywords insights={insights} />
+        </div>
+      )}
+
       {summaries.length === 0 ? (
         <div className="border border-dashed border-border rounded-lg px-6 py-10 text-center space-y-2">
           <p className="text-sm text-text-secondary">아직 경쟁사 분석이 생성되지 않았어요</p>
@@ -260,11 +267,6 @@ export default function CompetitorSection({ summaries, insights = [] }: Props) {
           )}
         </>
       )}
-
-      {/* 키워드 비교 분석 */}
-      <div className="mt-8">
-        <CompetitorKeywords insights={insights} />
-      </div>
     </div>
   )
 }

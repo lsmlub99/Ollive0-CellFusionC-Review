@@ -403,7 +403,7 @@ def run():
         init_db(conn=conn)
 
         with conn.cursor() as cur:
-            cur.execute('SELECT goods_no FROM products')
+            cur.execute('SELECT goods_no FROM products WHERE is_competitor = FALSE')
             our_goods = {r['goods_no'] for r in cur.fetchall()}
 
         print(f'자사 상품 {len(our_goods)}개 기준\n')
